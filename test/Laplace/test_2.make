@@ -21,13 +21,14 @@ endif
 #
 COM = ../../src/Common
 LAP = ../../src/Laplace
+HELM = ../../src/Helmholtz
 
 .PHONY: all clean
 
 default: all
 
 
-OBJECTS = test_lfmm3d_mps.o \
+OBJECTS = test_2.o \
     $(COM)/hkrand.o \
     $(COM)/dlaran.o \
     $(COM)/prini.o \
@@ -45,12 +46,11 @@ OBJECTS = test_lfmm3d_mps.o \
     $(LAP)/l3dterms.o \
     $(LAP)/l3dtrans.o \
     $(LAP)/laprouts3d.o \
+    $(LAP)/lfmm3dwrap.o \
     $(LAP)/lapkernels.o \
-    $(LAP)/projections.o \
+    $(LAP)/lwtsexp_sep1.o \
     $(HELM)/h3dcommon.o \
-    $(HELM)/hfmm3d_mps.o \
     $(LAP)/lfmm3d.o \
-    $(LAP)/lfmm3d_mps.o \
     $(LAP)/lpwrouts.o \
     $(HELM)/hwts3e.o \
     $(HELM)/hnumphys.o \

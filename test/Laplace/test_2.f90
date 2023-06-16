@@ -2,8 +2,7 @@ program test_lfmm3d_mp2loc
   implicit double precision (a-h,o-z)
  ! character(len=72) str1
  !  implicit none
-      integer ns,nt
-      double precision nd 
+      integer ns,nt,nd
       double precision, allocatable :: source(:,:),targ(:,:)
       double precision, allocatable :: charge(:)
       double precision, allocatable :: dipvec(:,:)
@@ -109,34 +108,25 @@ program test_lfmm3d_mp2loc
   !
   ! do the direct calculation
   !
-        thresh = 1.0d-15
         ifcharge = 1
         ifdipole = 0
         ifpgh = 1
         ntarg = 0
         ifpghtarg = 0
 
-       
-       nd = 3
+       ier = 0
+       nd = 1
 
      call lfmm3d(nd, eps, ns, source, ifcharge, &
       charge, ifdipole, dipvec, iper, ifpgh, pot, grad, hess, ntarg, &
       targ, ifpghtarg, pottarg, gradtarg, hesstarg, ier)
   
      call prin2('via fmm, potential = *', pot, 10)
-     call prin2('via fmm, Tarpotential = *', pottarg, 10)
+
+     call lfmm3d_s_c_p(eps,ns,source,charge,pot,ier)
 
 
-
-       ifcharge = 1
-       ifdipole = 0
-       ifpgh = 1
-       ifpghtarg = 0
-
-       call lfmm3d_s_c_p(eps,ns,source,charge,pot,ier)
-
-
-call prin2('via fmm, potential = *', pot, 10)
+     call prin2('via fmm, potential = *', pot, 10)
 
 
   stop
