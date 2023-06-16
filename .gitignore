@@ -22,3 +22,5 @@ lib/*
 *.log
 *.sh
 sbatch*
+.DS_Store
+*.png
