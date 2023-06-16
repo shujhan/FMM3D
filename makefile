@@ -343,6 +343,17 @@ test_hfmm3d_mps: $(STATICLIB) $(TOBJS)
   $(TOBJS) $(COMOBJS) $(HOBJS) $(LIBS)\
   -o test/Helmholtz/int2-test-hfmm3d-mps
 
+test_lfmm3d_mps: $(STATICLIB) $(TOBJS)
+	$(FC) $(FFLAGS) test/Laplace/test_lfmm3d_mps.f90 \
+  $(TOBJS) $(COMOBJS) $(LOBJS) $(LIBS) $(HOBJS)\
+  -o test/Laplace/int2-test-lfmm3d-mps
+
+test_2: $(STATICLIB) $(TOBJS)
+	$(FC) $(FFLAGS) test/Laplace/test_2.f90 \
+  $(TOBJS) $(COMOBJS) $(LOBJS) $(LIBS) $(HOBJS)\
+  -o test/Laplace/int2-test2
+
+
 
 ## Linking against dynamic libraries
 #

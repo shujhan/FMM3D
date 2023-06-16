@@ -102,6 +102,7 @@ c
 
        call lfmm3d_s_c_p(eps,ns,source,charge,pot,ier)
 
+       !call prin2('via fmm, potential = *', pot, 10)
 
        ifcharge = 1
        ifdipole = 0
@@ -1206,6 +1207,7 @@ c
       endif
 
       err = sqrt(err/ra)
+      call prin2('via fmm, potential = *', pot, 10)
       return
       end
       

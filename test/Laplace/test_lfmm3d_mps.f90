@@ -1,4 +1,4 @@
-program test_hfmm3d_mp2loc
+program test_lfmm3d_mp2loc
   implicit double precision (a-h,o-z)
   
   character(len=72) str1
@@ -14,13 +14,13 @@ program test_hfmm3d_mp2loc
   double precision, allocatable :: centers(:,:)
   double precision, allocatable :: wlege(:), rscales(:)
   
-  double complex :: eye, zk, ima
-  double complex, allocatable :: charge(:,:)
-  double complex, allocatable :: dipvec(:,:,:)
-  double complex, allocatable :: pot(:,:), pot2(:,:), pottarg(:,:)
-  double complex, allocatable :: grad(:,:,:),gradtarg(:,:,:)
-  double complex, allocatable :: hess(:,:,:),hesstarg(:,:,:)
-  double complex, allocatable :: mpole(:), local(:)
+  double precision :: eye, zk, ima
+  double precision, allocatable :: charge(:,:)
+  double precision, allocatable :: dipvec(:,:,:)
+  double precision, allocatable :: pot(:,:), pot2(:,:), pottarg(:,:)
+  double precision, allocatable :: grad(:,:,:),gradtarg(:,:,:)
+  double precision, allocatable :: hess(:,:,:),hesstarg(:,:,:)
+  double precision, allocatable :: mpole(:), local(:)
 
 
   data eye/(0.0d0,1.0d0)/
@@ -57,7 +57,7 @@ program test_hfmm3d_mp2loc
   eps = 0.5d-9
 
   write(*,*) "=========================================="
-  write(*,*) "Testing suite for hfmm3d_mps"
+  write(*,*) "Testing suite for lfmm3d_mps"
   write(*,'(a,e12.5)') "Requested precision = ",eps
 
   boxsize = 1
@@ -83,7 +83,34 @@ program test_hfmm3d_mp2loc
       end do
     end do
   end do
+
+
+
+
+
+
+!     do i=1,nt
+!       targ(1,i) = hkrand(0)
+!        targ(2,i) = hkrand(0)
+!        targ(3,i) = hkrand(0)
+!      enddo  
   
+
+!  do i = 1,nt
+!    do idim=1,nd
+!     pottarg(idim,i) = 0
+!     gradtarg(idim,1,i) = 0
+!     gradtarg(idim,2,i) = 0
+!      gradtarg(idim,3,i) = 0 
+!    enddo
+!  enddo
+ !call prin2('target', targ, 10)
+
+
+
+
+
+
   
   dnorm = 0
   do i=1,ns
@@ -162,18 +189,16 @@ program test_hfmm3d_mp2loc
   rscale = 1
   sc = abs(zk)*shift
   if (sc .lt. 1) rscale = sc
-
   call prin2('rscale = *', rscale, 1)
   
   allocate(rscales(nc))
   do i = 1,nc
     rscales(i) = rscale
-    call h3dformmpc(nd, zk, rscale, source(1,i), charge(1,i), &
+    call l3dformmpc(nd,rscale, source(1,i), charge(1,i), &
         ns1, centers(1,i), nterms(i), mpole(impole(i)), &
         wlege, nlege)
   end do
 
-  
 
  call prin2('source', source, 10)
  call prin2('wlege', wlege, 10)
@@ -181,11 +206,7 @@ program test_hfmm3d_mp2loc
  call prin2('charge', charge, 10)
  call prin2('mpole', mpole, 10)
 
-
-
-
-
-
+  
   !
   ! do the direct calculation
   !
@@ -195,11 +216,23 @@ program test_hfmm3d_mp2loc
   ifpgh = 1
   ntarg = 0
   ifpghtarg = 0
-  call hfmm3d(nd, eps, zk, ns, source, ifcharge, &
-      charge, ifdipole, dipvec, iper, ifpgh, pot, grad, hess, ntarg, &
-      targ, ifpghtarg, pottarg, gradtarg, hesstarg, ier)
+!  call lfmm3d(nd, eps, ns, source, ifcharge, &
+!      charge, ifdipole, dipvec, iper, ifpgh, pot, grad, hess, ntarg, &
+!     targ, ifpghtarg, pottarg, gradtarg, hesstarg, ier)
+
+
+  call lfmm3d_s_c_p(eps,ns,source,charge,pot,ier)
   
   call prin2('via fmm, potential = *', pot, 10)
+
+
+
+
+  !call comperr_vec(nd,zk,ns,source,ifcharge,charge,ifdipole, &
+  !  dipvec,ifpgh,pot,grad,nt,targ,ifpghtarg,pottarg, &
+   ! gradtarg,ntest,err)
+
+!call prin2('comperr, error = *', err, 1)
 
   
   allocate(local(nd*ntot))
@@ -218,19 +251,28 @@ program test_hfmm3d_mp2loc
   write(6,*) 
 
 
-  call hfmm3d_mps(nd, eps, zk, &
+  !call hfmm3d_mps(nd, eps, zk, &
+   !   nc, centers, rscales, nterms, mpole, impole, local,ier)
+
+  call lfmm3d_mps(nd, eps,  &
       nc, centers, rscales, nterms, mpole, impole, local,ier)
+
+
+
 
   call zinitialize(nd*nc, pot2)
   npts = 1
   do i = 1,nc
-    call h3dtaevalp(nd, zk, rscales(i), &
+    call l3dtaevalp(nd, rscales(i), &
         centers(1,i), local(impole(i)), &
         nterms(i), source(1,i), npts, pot2(1,i), &
         wlege, nlege)
   end do
   
-  call prin2('from hfmm3d_mps, potential = *', pot2, 10)
+  call prin2('from lfmm3d_mps, potential = *', pot2, 10)
+
+
+
 
   err = 0
   dnorm = 0
@@ -255,7 +297,7 @@ program test_hfmm3d_mp2loc
   if(err.lt.eps) isuccess = 1
 
   write(33,'(a,i1,a,i1,a)') 'Successfully completed ', &
-    isuccess,' out of ',ntest,' tests in helm3d_mps testing suite'
+    isuccess,' out of ',ntest,' tests in lap3d_mps testing suite'
   close(33)
 
   
@@ -351,66 +393,66 @@ subroutine comperr_vec(nd,zk,ns,source,ifcharge,charge,ifdipole, &
 
   if(ifcharge.eq.1.and.ifdipole.eq.0) then
     if(ifpgh.eq.1) then
-      call h3ddirectcp(nd,zk,source,charge,ns,source,ntest, &
+      call l3ddirectcp(nd,source,charge,ns,source,ntest, &
           potex,thresh)
     endif
 
     if(ifpgh.eq.2) then
-      call h3ddirectcg(nd,zk,source,charge,ns,source,ntest, &
+      call l3ddirectcg(nd,source,charge,ns,source,ntest, &
           potex,gradex,thresh)
     endif
 
     if(ifpghtarg.eq.1) then
-      call h3ddirectcp(nd,zk,source,charge,ns,targ,ntest, &
+      call l3ddirectcp(nd,source,charge,ns,targ,ntest, &
           pottargex,thresh)
     endif
 
     if(ifpghtarg.eq.2) then
-      call h3ddirectcg(nd,zk,source,charge,ns,targ,ntest, &
+      call l3ddirectcg(nd,source,charge,ns,targ,ntest, &
           pottargex,gradtargex,thresh)
     endif
   endif
 
   if(ifcharge.eq.0.and.ifdipole.eq.1) then
     if(ifpgh.eq.1) then
-      call h3ddirectdp(nd,zk,source,dipvec, &
+      call l3ddirectdp(nd,source,dipvec, &
           ns,source,ntest,potex,thresh)
     endif
 
     if(ifpgh.eq.2) then
-      call h3ddirectdg(nd,zk,source,dipvec, &
+      call l3ddirectdg(nd,source,dipvec, &
           ns,source,ntest,potex,gradex,thresh)
     endif
 
     if(ifpghtarg.eq.1) then
-      call h3ddirectdp(nd,zk,source,dipvec, &
+      call l3ddirectdp(nd,source,dipvec, &
           ns,targ,ntest,pottargex,thresh)
     endif
 
     if(ifpghtarg.eq.2) then
-      call h3ddirectdg(nd,zk,source,dipvec, &
+      call l3ddirectdg(nd,source,dipvec, &
           ns,targ,ntest,pottargex,gradtargex,thresh)
     endif
   endif
 
   if(ifcharge.eq.1.and.ifdipole.eq.1) then
     if(ifpgh.eq.1) then
-      call h3ddirectcdp(nd,zk,source,charge,dipvec, &
+      call l3ddirectcdp(nd,source,charge,dipvec, &
           ns,source,ntest,potex,thresh)
     endif
 
     if(ifpgh.eq.2) then
-      call h3ddirectcdg(nd,zk,source,charge,dipvec, &
+      call l3ddirectcdg(nd,source,charge,dipvec, &
           ns,source,ntest,potex,gradex,thresh)
     endif
 
     if(ifpghtarg.eq.1) then
-      call h3ddirectcdp(nd,zk,source,charge,dipvec, &
+      call l3ddirectcdp(nd,source,charge,dipvec, &
           ns,targ,ntest,pottargex,thresh)
     endif
 
     if(ifpghtarg.eq.2) then
-      call h3ddirectcdg(nd,zk,source,charge,dipvec, &
+      call l3ddirectcdg(nd,source,charge,dipvec, &
           ns,targ,ntest,pottargex,gradtargex,thresh)
     endif
   endif
