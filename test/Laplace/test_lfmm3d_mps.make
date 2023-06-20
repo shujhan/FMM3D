@@ -45,14 +45,18 @@ OBJECTS = test_lfmm3d_mps.o \
     $(LAP)/l3dterms.o \
     $(LAP)/l3dtrans.o \
     $(LAP)/laprouts3d.o \
+    $(LAP)/lfmm3dwrap.o \
     $(LAP)/lapkernels.o \
-    $(LAP)/projections.o \
-    $(HELM)/h3dcommon.o \
-    $(LAP)/lfmm3d_mps.o \
+    $(LAP)/lwtsexp_sep1.o \
     $(LAP)/lfmm3d.o \
     $(LAP)/lfmm3d_mps.o \
     $(LAP)/lpwrouts.o \
     $(LAP)/lndiv.o \
+
+
+
+
+
 
 all: $(OBJECTS) 
 	$(FC) $(FFLAGS)  -o $(PROJECT) $(OBJECTS) 

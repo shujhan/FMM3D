@@ -139,7 +139,8 @@ subroutine lfmm3d_mps(nd, eps, nmpole, cmpole, rmpole, mterms, &
   !
   !        other temporary variables
   !
-  integer :: i, j, l, ijk, iert,ifprint,ilev,idim,ier
+  integer :: i, j, l, ijk, iert,ifprint,ilev,idim
+  integer:: ier
   integer :: nlege, lw7, lused7
   double precision :: wlege(40000)
   double precision time1,time2,omp_get_wtime,second
@@ -181,6 +182,7 @@ subroutine lfmm3d_mps(nd, eps, nmpole, cmpole, rmpole, mterms, &
   ! memory management code for constructing level restricted tree
   !
   iert = 0
+  ier = 0
 
   ntarg = 0
   targ(1) = 0
@@ -374,7 +376,7 @@ subroutine lfmm3dmain_mps(nd, eps, &
     iaddr, rmlexp, lmptot, mptemp, mptemp2, lmptemp, &
     itree, ltree, ipointer, ndiv, nlevels, &
     nboxes, iper, boxsize, centers, isrcse, &
-    rscales, laddr, nterms, ier )
+    rscales, laddr, nterms, ier)
   implicit none
 
   !
@@ -398,7 +400,7 @@ subroutine lfmm3dmain_mps(nd, eps, &
   double precision :: mptemp2(lmptemp)
 
   ! tree variables
-  integer :: isep,iper
+  integer :: isep,iper,ier
   integer *8 :: ltree
   integer :: laddr(2,0:nlevels)
   integer :: nterms(0:nlevels)
@@ -437,6 +439,20 @@ subroutine lfmm3dmain_mps(nd, eps, &
   integer e1(20),e3(5),e5(5),e7(5),w2(5),w4(5),w6(5),w8(5)
 
 
+!     temp variables
+  integer i,j,k,l,ii,jj,kk,ll,m,idim,igbox
+  integer ibox,jbox,ilev,npts,npts0,kbox,dir
+  integer nchild
+
+  integer istart,iend,istarts,iends
+  integer istartt,iendt,istarte,iende
+  integer isstart,isend,jsstart,jsend
+  integer jstart,jend
+  integer nn
+
+  integer ifprint
+
+
 
   ! pw stuff
   integer nexpmax, nlams, nmax, nthmax, nphmax,nmax2,nmaxt
@@ -458,8 +474,8 @@ subroutine lfmm3dmain_mps(nd, eps, &
   double complex, allocatable :: fexpe(:),fexpo(:),fexpback(:)
   double complex, allocatable :: mexp(:,:,:,:)
   double complex, allocatable :: mexpf1(:,:),mexpf2(:,:)
-  double complex, allocatable ::
-         mexpp1(:,:),mexpp2(:,:),mexppall(:,:,:)
+  double complex, allocatable :: mexpp1(:,:),mexpp2(:,:),mexppall(:,:,:)
+
 
   double complex, allocatable :: tmp(:,:,:)
   double precision, allocatable :: mptmp(:,:)
@@ -468,20 +484,23 @@ subroutine lfmm3dmain_mps(nd, eps, &
   ! temp variables
 
 
-   integer ix,iy,iz,ictr
-      double precision rtmp
-      double complex zmul
+  integer ix,iy,iz,ictr
+  double precision rtmp
+  double complex zmul
 
-      integer nlege, lw7, lused7, itype
-      double precision wlege(40000)
-      integer nterms_eval(4,0:nlevels)
-       double complex eye, ztmp
-
-
-
+  integer nlege, lw7, lused7, itype
+  double precision wlege(40000)
+  integer nterms_eval(4,0:nlevels)
+  double complex eye, ztmp
+  double precision, allocatable :: rscpow(:)
 
 
-
+  integer ctr,ifinit2
+  integer iert, ifpw, ifmp
+  integer ltot
+  integer nquad2
+  integer iloc
+  integer mt
 
 
 
@@ -512,28 +531,32 @@ subroutine lfmm3dmain_mps(nd, eps, &
 ! end of list 4 variables
 
 
+
+
+
 !   Hessian variables
 !
   double precision, allocatable :: scarray(:,:)
 
   integer *8 bigint
-  integer iert
 
   double precision d,time1,time2,omp_get_wtime
   double precision timeinfo(10)
-  double precision rtmp
-  double precision wlege(40000)
+  !double precision rtmp
+  !double precision wlege(40000)
   double precision thresh
   double precision alphaj
   double precision radius
   double precision pi
   double precision :: rtmp1,rtmp2,rtmp3,rtmp4, done
   double precision, allocatable :: xnodes(:),wts(:)
-  double complex zmul
-  double complex eye, ztmp,zmult
+  !double complex zmul
+  double complex zmult
   double complex :: ima, cd, cd1(10), cd2(10), work(100000)
 
   data ima/(0.0d0,1.0d0)/
+
+  integer nthd, ithd
 
 
 
@@ -607,7 +630,6 @@ subroutine lfmm3dmain_mps(nd, eps, &
   enddo
   allocate(rscpow(0:nmax))
   allocate(carray(4*nmax+1,4*nmax+1))
-  allocate(rsc(0:nmax))
   allocate(dc(0:4*nmax,0:4*nmax))
   allocate(rdplus(0:nmax,0:nmax,-nmax:nmax))
   allocate(rdminus(0:nmax,0:nmax,-nmax:nmax))
@@ -640,7 +662,7 @@ subroutine lfmm3dmain_mps(nd, eps, &
       call rlscini(rlsc,nlams,rlams,nmax)
 
 
-!     nn = 10*(nmax+2)**2
+     nn = 10*(nmax+2)**2
       allocate(scarray(nn,0:nlevels))
 
       do ilev=0,nlevels
@@ -671,8 +693,7 @@ subroutine lfmm3dmain_mps(nd, eps, &
       allocate(yshift(-5:5,nexptotp))
       allocate(zshift(5,nexptotp))
 
-      allocate(mexpf1(nd,nexptot),mexpf2(nd,nexptot),
-        mexpp1(nd,nexptotp))
+      allocate(mexpf1(nd,nexptot),mexpf2(nd,nexptot),mexpp1(nd,nexptotp))
       allocate(mexpp2(nd,nexptotp),mexppall(nd,nexptotp,16))
 
 !
@@ -682,6 +703,9 @@ subroutine lfmm3dmain_mps(nd, eps, &
       bigint = nboxes
       bigint = bigint*6
       bigint = bigint*nexptotp*nd
+
+      ifprint=1
+
 
       if(ifprint.ge.1) print *, "mexp memory=",bigint/1.0d9
 
@@ -731,8 +755,7 @@ subroutine lfmm3dmain_mps(nd, eps, &
         enddo
       enddo
       
-      if(ifprint.ge.1) 
-     1   call prin2('end of generating plane wave info*',i,0)
+      if(ifprint.ge.1) call prin2('end of generating plane wave info*',i,0)
 
 
 
@@ -824,13 +847,14 @@ subroutine lfmm3dmain_mps(nd, eps, &
   enddo
 
   ltot = 0
-  !$omp parallel do default(shared) private(l,mt)  &
-  !$omp reduction(+:ltot)
+  
+
+  
   do l = 1,nmpole
     mt = mtermssort(l)
     ltot = ltot + (mt+1)*(2*mt+1)
   end do
-  !$omp end parallel do
+  
 
   
   !$omp parallel do default (shared) private(l)
@@ -859,8 +883,7 @@ subroutine lfmm3dmain_mps(nd, eps, &
       enddo
       if(ifprint.ge.1) print *,"nboxes:",nboxes,"cntlist4:",cntlist4
       allocate(pgboxwexp(nd,nexptotp,cntlist4,6))
-      allocate(gboxmexp(nd*(nterms(nlevels)+1)*
-                        (2*nterms(nlevels)+1),8,cntlist4))
+      allocate(gboxmexp(nd*(nterms(nlevels)+1)*(2*nterms(nlevels)+1),8,cntlist4))
 
 
 
@@ -868,8 +891,8 @@ subroutine lfmm3dmain_mps(nd, eps, &
       allocate(gboxfl(2,8,nthd))
 
       nmaxt = 0
-!$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ibox,istart,iend,npts)
-!$OMP$REDUCTION(max:nmaxt)
+!$OMP !PARALLEL DO DEFAULT(SHARED) PRIVATE(ibox,istart,iend,npts)
+!$OMP !$REDUCTION(max:nmaxt)
       do ibox=1,nboxes
         if(list4ct(ibox).gt.0) then
           istart = isrcse(1,ibox)
@@ -878,7 +901,7 @@ subroutine lfmm3dmain_mps(nd, eps, &
           if(npts.gt.nmaxt) nmaxt = npts
         endif
       enddo
-!$OMP END PARALLEL DO
+!$OMP !END PARALLEL DO
 
       allocate(gboxind(nmaxt,nthd))
       allocate(gboxsort(3,nmaxt,nthd))
@@ -899,144 +922,136 @@ subroutine lfmm3dmain_mps(nd, eps, &
             rscpow(i) = rscpow(i-1)*rtmp
          enddo
 
-!$OMP PARALLEL DO DEFAULT(SHARED)
-!$OMP$PRIVATE(ibox,istart,iend,jbox,jstart,jend,npts,npts0,i)
-!$OMP$PRIVATE(ithd)
+
          do ibox=laddr(1,ilev),laddr(2,ilev)
             ithd = 0
-!$          ithd=omp_get_thread_num()
+
+
             ithd = ithd + 1
             if(list4ct(ibox).gt.0) then
               istart=isrcse(1,ibox)
               iend=isrcse(2,ibox)
               npts = iend-istart+1
 
-              if(npts.gt.0) then
-                call subdividebox(sourcesort(1,istart),npts,
-                    centers(1,ibox),boxsize(ilev+1),
-                    gboxind(1,ithd),gboxfl(1,1,ithd),
-                    gboxsubcenters(1,1,ithd))
-                call dreorderf(3,npts,sourcesort(1,istart),
-                    gboxsort(1,1,ithd),gboxind(1,ithd))
-                if(ifcharge.eq.1) then
-                  call dreorderf(nd,npts,chargesort(1,istart),
-                      gboxcgsort(1,1,ithd),gboxind(1,ithd))
-                endif
-                if(ifdipole.eq.1) then
-                  call dreorderf(3*nd,npts,dipvecsort(1,1,istart),
-                      gboxdpsort(1,1,1,ithd),gboxind(1,ithd))
-                endif
+!              if(npts.gt.0) then
+!                call subdividebox(sourcesort(1,istart),npts, &
+!                    centers(1,ibox),boxsize(ilev+1), &
+!                    gboxind(1,ithd),gboxfl(1,1,ithd),&
+!                    gboxsubcenters(1,1,ithd))
+!                call dreorderf(3,npts,sourcesort(1,istart),&
+!                    gboxsort(1,1,ithd),gboxind(1,ithd))
+
                 do i=1,8
                   if(gboxfl(1,i,ithd).gt.0) then
                     jstart=gboxfl(1,i,ithd)
                     jend=gboxfl(2,i,ithd)
                     npts0=jend-jstart+1
                     jbox=list4ct(ibox)
-                    if(ifcharge.eq.1.and.ifdipole.eq.0) then
-                      call l3dformmpc(nd,rscales(ilev+1),
-                        gboxsort(1,jstart,ithd),
-                        gboxcgsort(1,jstart,ithd),
-                        npts0,gboxsubcenters(1,i,ithd),nterms(ilev+1),
+                    !if(ifcharge.eq.1.and.ifdipole.eq.0) then
+                      call l3dformmpc(nd,rscales(ilev+1),&
+                        gboxsort(1,jstart,ithd),&
+                        gboxcgsort(1,jstart,ithd),&
+                        npts0,gboxsubcenters(1,i,ithd),nterms(ilev+1),&
                         gboxmexp(1,i,jbox),wlege,nlege)          
-                    endif
-                    if(ifcharge.eq.0.and.ifdipole.eq.1) then
-                      call l3dformmpd(nd,rscales(ilev+1),
-                        gboxsort(1,jstart,ithd),
-                        gboxdpsort(1,1,jstart,ithd),
-                        npts0,gboxsubcenters(1,i,ithd),nterms(ilev+1),
-                        gboxmexp(1,i,jbox),wlege,nlege)          
-                    endif
-                    if(ifcharge.eq.1.and.ifdipole.eq.1) then
-                      call l3dformmpcd(nd,rscales(ilev+1),
-                        gboxsort(1,jstart,ithd),
-                        gboxcgsort(1,jstart,ithd),
-                        gboxdpsort(1,1,jstart,ithd),
-                        npts0,gboxsubcenters(1,i,ithd),nterms(ilev+1),
-                        gboxmexp(1,i,jbox),wlege,nlege)          
-                    endif
-                    call l3dmpmp(nd,rscales(ilev+1),
-                        gboxsubcenters(1,i,ithd),gboxmexp(1,i,jbox),
-                        nterms(ilev+1),rscales(ilev),centers(1,ibox),
+                    !endif
+!                    if(ifcharge.eq.0.and.ifdipole.eq.1) then
+!                      call l3dformmpd(nd,rscales(ilev+1),&
+!                        gboxsort(1,jstart,ithd),&
+!                        gboxdpsort(1,1,jstart,ithd),&
+!                        npts0,gboxsubcenters(1,i,ithd),nterms(ilev+1),&
+!                        gboxmexp(1,i,jbox),wlege,nlege)          
+!                    endif
+!                    if(ifcharge.eq.1.and.ifdipole.eq.1) then
+!                      call l3dformmpcd(nd,rscales(ilev+1),&
+!                        gboxsort(1,jstart,ithd),&
+!                        gboxcgsort(1,jstart,ithd),&
+!                        gboxdpsort(1,1,jstart,ithd),&
+!                        npts0,gboxsubcenters(1,i,ithd),nterms(ilev+1),&
+!                        gboxmexp(1,i,jbox),wlege,nlege)          
+!                    endif
+                    call l3dmpmp(nd,rscales(ilev+1),&
+                        gboxsubcenters(1,i,ithd),gboxmexp(1,i,jbox),&
+                        nterms(ilev+1),rscales(ilev),centers(1,ibox),&
                         rmlexp(iaddr(1,ibox)),nterms(ilev),dc,lca)
      
-                    call mpscale(nd,nterms(ilev+1),gboxmexp(1,i,jbox),
-                        rscpow,tmp(1,0,-nmax,ithd))
+                    call mpscale(nd,nterms(ilev+1),gboxmexp(1,i,jbox),&
+                        rscpow,tmp(1,0,-nmax))
 !
 !!               process up down for current box
 !
-                    call mpoletoexp(nd,tmp(1,0,-nmax,ithd),
-                        nterms(ilev+1),nlams,
-                        nfourier,nexptot,mexpf1(1,1,ithd),
-                        mexpf2(1,1,ithd),rlsc)
+                    call mpoletoexp(nd,tmp(1,0,-nmax),&
+                        nterms(ilev+1),nlams,&
+                        nfourier,nexptot,mexpf1(1,1),&
+                        mexpf2(1,1),rlsc)
 
-                    call ftophys(nd,mexpf1(1,1,ithd),
-                        nlams,rlams,nfourier,
-                        nphysical,nthmax,gboxwexp(1,1,1,i,ithd),
+                    call ftophys(nd,mexpf1(1,1),&
+                        nlams,rlams,nfourier,&
+                        nphysical,nthmax,gboxwexp(1,1,1,i,ithd),&
                         fexpe,fexpo)
 
-                    call ftophys(nd,mexpf2(1,1,ithd),
-                        nlams,rlams,nfourier,
-                        nphysical,nthmax,gboxwexp(1,1,2,i,ithd),
+                    call ftophys(nd,mexpf2(1,1),&
+                        nlams,rlams,nfourier,&
+                        nphysical,nthmax,gboxwexp(1,1,2,i,ithd),&
                         fexpe,fexpo)
 
-                    call processgboxudexp(nd,gboxwexp(1,1,1,i,ithd),
-                        gboxwexp(1,1,2,i,ithd),i,nexptotp,
-                        pgboxwexp(1,1,jbox,1),pgboxwexp(1,1,jbox,2),
+                    call processgboxudexp(nd,gboxwexp(1,1,1,i,ithd),&
+                        gboxwexp(1,1,2,i,ithd),i,nexptotp,&
+                        pgboxwexp(1,1,jbox,1),pgboxwexp(1,1,jbox,2),&
                         xshift,yshift,zshift)
 !
 !!                process north-south for current box
 !
-                    call rotztoy(nd,nterms(ilev+1),tmp(1,0,-nmax,ithd),
+                    call rotztoy(nd,nterms(ilev+1),tmp(1,0,-nmax),&
                         mptmp(1,ithd),rdminus)
-                    call mpoletoexp(nd,mptmp(1,ithd),
-                        nterms(ilev+1),nlams,
-                        nfourier,nexptot,mexpf1(1,1,ithd),
-                        mexpf2(1,1,ithd),rlsc)
+                    call mpoletoexp(nd,mptmp(1,ithd),&
+                        nterms(ilev+1),nlams,&
+                        nfourier,nexptot,mexpf1(1,1),&
+                        mexpf2(1,1),rlsc)
 
-                    call ftophys(nd,mexpf1(1,1,ithd),
-                        nlams,rlams,nfourier,
-                        nphysical,nthmax,gboxwexp(1,1,3,i,ithd),
+                    call ftophys(nd,mexpf1(1,1),&
+                        nlams,rlams,nfourier,&
+                        nphysical,nthmax,gboxwexp(1,1,3,i,ithd),&
                         fexpe,fexpo)
 
-                    call ftophys(nd,mexpf2(1,1,ithd),
-                        nlams,rlams,nfourier,
-                        nphysical,nthmax,gboxwexp(1,1,4,i,ithd),
+                    call ftophys(nd,mexpf2(1,1),&
+                        nlams,rlams,nfourier,&
+                        nphysical,nthmax,gboxwexp(1,1,4,i,ithd),&
                         fexpe,fexpo)
 
-                    call processgboxnsexp(nd,gboxwexp(1,1,3,i,ithd),
-                        gboxwexp(1,1,4,i,ithd),i,nexptotp,
-                        pgboxwexp(1,1,jbox,3),pgboxwexp(1,1,jbox,4),
+                    call processgboxnsexp(nd,gboxwexp(1,1,3,i,ithd),&
+                        gboxwexp(1,1,4,i,ithd),i,nexptotp,&
+                        pgboxwexp(1,1,jbox,3),pgboxwexp(1,1,jbox,4),&
                         xshift,yshift,zshift)
 !
 !!               process east-west for current box
 !
-                    call rotztox(nd,nterms(ilev+1),tmp(1,0,-nmax,ithd),
+                    call rotztox(nd,nterms(ilev+1),tmp(1,0,-nmax),&
                         mptmp(1,ithd),rdplus)
-                    call mpoletoexp(nd,mptmp(1,ithd),
-                        nterms(ilev+1),nlams,
-                        nfourier,nexptot,mexpf1(1,1,ithd),
-                        mexpf2(1,1,ithd),rlsc)
+                    call mpoletoexp(nd,mptmp(1,ithd),&
+                        nterms(ilev+1),nlams,&
+                        nfourier,nexptot,mexpf1(1,1),&
+                        mexpf2(1,1),rlsc)
 
-                    call ftophys(nd,mexpf1(1,1,ithd),
-                        nlams,rlams,nfourier,
-                        nphysical,nthmax,gboxwexp(1,1,5,i,ithd),
+                    call ftophys(nd,mexpf1(1,1),&
+                        nlams,rlams,nfourier,&
+                        nphysical,nthmax,gboxwexp(1,1,5,i,ithd),&
                         fexpe,fexpo)
 
-                    call ftophys(nd,mexpf2(1,1,ithd),
-                        nlams,rlams,nfourier,
-                        nphysical,nthmax,gboxwexp(1,1,6,i,ithd),
+                    call ftophys(nd,mexpf2(1,1),&
+                        nlams,rlams,nfourier,&
+                        nphysical,nthmax,gboxwexp(1,1,6,i,ithd),&
                         fexpe,fexpo)
                 
-                    call processgboxewexp(nd,gboxwexp(1,1,5,i,ithd),
-                        gboxwexp(1,1,6,i,ithd),i,nexptotp,
-                        pgboxwexp(1,1,jbox,5),pgboxwexp(1,1,jbox,6),
+                    call processgboxewexp(nd,gboxwexp(1,1,5,i,ithd),&
+                        gboxwexp(1,1,6,i,ithd),i,nexptotp,&
+                        pgboxwexp(1,1,jbox,5),pgboxwexp(1,1,jbox,6),&
                         xshift,yshift,zshift)
                   endif
                 enddo
-              endif
+              !endif
             endif
          enddo
-!$OMP END PARALLEL DO
+
       enddo
       deallocate(gboxfl,gboxsubcenters,gboxwexp,gboxcgsort)
       deallocate(gboxdpsort,gboxind,gboxsort)
@@ -1263,6 +1278,7 @@ subroutine lfmm3dmain_mps(nd, eps, &
   ifpw = 1
   ifmp = 0
 
+
   if ( (ifprint .ge. 1) .and. (ifmp .eq. 1) ) &
       call prinf('=== doing point and shoots... ===*',i,0)
 
@@ -1387,8 +1403,9 @@ subroutine lfmm3dmain_mps(nd, eps, &
         ! create multipole to plane wave expansion for all boxes at this
         ! level
         !
-        !$omp parallel do default (shared) &
-        !$omp    private(ibox,istart,iend,npts,tmp,mexpf1,mexpf2,tmp2)
+       
+
+       
         do ibox = laddr(1,ilev),laddr(2,ilev)
           istart = isrcse(1,ibox) 
           iend = isrcse(2,ibox) 
@@ -1402,11 +1419,11 @@ subroutine lfmm3dmain_mps(nd, eps, &
             call mpoletoexp(nd,tmp,nterms(ilev), &
                 nlams,nfourier,nexptot,mexpf1,mexpf2,rlsc) 
 
-            call ftophys(nd,mexpf1,nlams,rlams,nfourier,nphysical,nthmax &
-                mexp(1,1,ibox,1),fexp,fexpo)           
+            call ftophys(nd,mexpf1,nlams,rlams,nfourier,nphysical,nthmax, &
+                mexp(1,1,ibox,1),fexpe,fexpo)           
 
-            call ftophys(nd,mexpf2,nlams,rlams,nfourier,nphysical, nphmax&
-                mexp(1,1,ibox,2),fexp,fexpo)
+            call ftophys(nd,mexpf2,nlams,rlams,nfourier,nphysical, nphmax,&
+                mexp(1,1,ibox,2),fexpe,fexpo)
 
 
             ! form mexpnorth, mexpsouth for current box
@@ -1419,10 +1436,10 @@ subroutine lfmm3dmain_mps(nd, eps, &
             call mpoletoexp(nd,mptmp(1,ithd),nterms(ilev),nlams, &
                 nfourier,nexptot,mexpf1,mexpf2,rlsc)
 
-            call ftophys(nd,mexpf1,nlams,rlams，nfourier, &
+            call ftophys(nd,mexpf1,nlams,rlams,nfourier, &
                 nphysical,nthmax,mexp(1,1,ibox,3),fexpe,fexpo)           
 
-            call ftophys(nd,mexpf2,nlams,,rlams,nfourier, &
+            call ftophys(nd,mexpf2,nlams,rlams,nfourier, &
                 nphysical,nthmax,mexp(1,1,ibox,4),fexpe,fexpo)   
 
 
@@ -1432,15 +1449,15 @@ subroutine lfmm3dmain_mps(nd, eps, &
             call mpoletoexp(nd,mptmp(1,ithd),nterms(ilev),nlams, &
                 nfourier,nexptot,mexpf1,mexpf2,rlsc)
 
-            call ftophys(nd,mexpf1,nlams,rlams，nfourier, &
+            call ftophys(nd,mexpf1,nlams,rlams,nfourier, &
                 nphysical,nthmax,mexp(1,1,ibox,5),fexpe,fexpo)
 
-            call ftophys(nd,mexpf2,nlams,rlams，nfourier, &
+            call ftophys(nd,mexpf2,nlams,rlams,nfourier, &
                 nphysical,mexp(1,1,ibox,6),fexpe,fexpo)           
 
           endif
         enddo
-        !$omp end parallel do       
+        
 
         !
         ! Loop over parent boxes and ship plane wave expansions to the
@@ -1451,21 +1468,14 @@ subroutine lfmm3dmain_mps(nd, eps, &
         ! expansions coming from all the lists
         !
 
-        !$omp parallel do default (shared) &
-        !$omp private(ibox,istart,iend,npts,nchild) &
-        !$omp private(mexpf1,mexpf2,mexpp1,mexpp2,mexppall) &
-        !$omp private(nuall,uall,ndall,dall,nnall,nall,nsall,sall) &
-        !$omp private(neall,eall,nwall,wall,nu1234,u1234,nd5678,d5678)&
-        !$omp private(nn1256,n1256,ns3478,s3478,ne1357,e1357,nw2468,w2468)&
-        !$omp private(nn12,n12,nn56,n56,ns34,s34,ns78,s78,ne13,e13,ne57,e57)&
-        !$omp private(nw24,w24,nw68,w68,ne1,e1,ne3,e3,ne5,e5,ne7,e7)&
-        !$omp private(nw2,w2,nw4,w4,nw6,w6,nw8,w8)
 
-         rscpow(0) = 1.0d0
-         rtmp = rscales(ilev)/boxsize(ilev)
-         do i=1,nterms(ilev)
-            rscpow(i) = rscpow(i-1)*rtmp
-         enddo
+
+
+        !rscpow(0) = 1.0d0
+        !rtmp = rscales(ilev)/boxsize(ilev)
+        do i=1,nterms(ilev)
+          rscpow(i) = rscpow(i-1)*rtmp
+        enddo
 
 
 
@@ -1541,16 +1551,16 @@ subroutine lfmm3dmain_mps(nd, eps, &
          !deallocate(iboxlexp) 
 
 
-        !$omp end parallel do        
+       
 
     end do
-      deallocate(iboxsrcind,iboxsrc,iboxpot,iboxgrad,iboxhess)
-      deallocate(iboxsubcenters,iboxfl)
-      deallocate(uall,dall,nall,sall,eall,wall)
-      deallocate(u1234,d5678,n1256,s3478)
-      deallocate(e1357,w2468,n12,n56,s34,s78)
-      deallocate(e13,e57,w24,w68)
-      deallocate(e1,e3,e5,e7,w2,w4,w6,w8)
+      !deallocate(iboxsrcind,iboxsrc,iboxpot,iboxgrad,iboxhess)
+      !deallocate(iboxsubcenters,iboxfl)
+      !deallocate(uall,dall,nall,sall,eall,wall)
+      !deallocate(u1234,d5678,n1256,s3478)
+      !deallocate(e1357,w2468,n12,n56,s34,s78)
+      !deallocate(e13,e57,w24,w68)
+      !deallocate(e1,e3,e5,e7,w2,w4,w6,w8)
       deallocate(tmp,mptmp)
 
   end if
@@ -1718,9 +1728,9 @@ subroutine lfmm3dmain_mps(nd, eps, &
     ! be valid translations, despite them being in the nearfield
     !
 
-    !$omp parallel do default(shared) &
-    !$omp   private(ibox,istarts,iends,npts0,i) &
-    !$omp   private(jbox,jstart,jend,npts,d,j,iloc)
+
+    
+    
     do ibox = laddr(1,ilev),laddr(2,ilev)
       istarts = isrcse(1,ibox) 
       iends = isrcse(2,ibox)
@@ -1765,7 +1775,7 @@ subroutine lfmm3dmain_mps(nd, eps, &
 
 
     enddo
-    !$omp end parallel do            
+    
 
   enddo
 
@@ -1807,4 +1817,4 @@ subroutine lfmm3dmain_mps(nd, eps, &
 
 
   return
-end subroutine hfmm3dmain_mps
+end subroutine lfmm3dmain_mps

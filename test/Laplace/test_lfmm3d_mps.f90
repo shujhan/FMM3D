@@ -216,6 +216,8 @@ program test_lfmm3d_mp2loc
   ifpgh = 1
   ntarg = 0
   ifpghtarg = 0
+  nd = 0
+  ier = 0
 !  call lfmm3d(nd, eps, ns, source, ifcharge, &
 !      charge, ifdipole, dipvec, iper, ifpgh, pot, grad, hess, ntarg, &
 !     targ, ifpghtarg, pottarg, gradtarg, hesstarg, ier)
