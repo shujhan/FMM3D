@@ -200,11 +200,6 @@ program test_lfmm3d_mp2loc
   end do
 
 
- call prin2('source', source, 10)
- call prin2('wlege', wlege, 10)
- call prinf('nlege', nlege, 1)
- call prin2('charge', charge, 10)
- call prin2('mpole', mpole, 10)
 
   
   !
@@ -259,7 +254,7 @@ program test_lfmm3d_mp2loc
   call lfmm3d_mps(nd, eps,  &
       nc, centers, rscales, nterms, mpole, impole, local,ier)
 
-
+  call prin2('from lfmm3d_mps, local expansions = *', local, 10)
 
 
   call zinitialize(nd*nc, pot2)
