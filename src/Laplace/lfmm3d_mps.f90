@@ -212,8 +212,7 @@ subroutine lfmm3d_mps(nd, eps, nmpole, cmpole, rmpole, mterms, &
     ipointer,treecenters,isrc,isrcse)
 
 
-  call pts_tree_sort(nexpc,expc,itree,ltree,nboxes,nlevels, &
-     ipointer,treecenters,iexpc,iexpcse)
+
 
 
 !
@@ -327,7 +326,7 @@ subroutine lfmm3d_mps(nd, eps, nmpole, cmpole, rmpole, mterms, &
   !$ time1=omp_get_wtime()
   call lfmm3dmain_mps(nd, eps, &
       nmpole, cmpolesort, rmpolesort, mtermssort, mpolesort, &
-      impolesort, localsort, nexpc, ntj, &
+      impolesort, localsort, &
       iaddr,rmlexp,lmptot,mptemp,mptemp2,lmptemp, &
       itree,ltree,ipointer,ndiv,nlevels, &
       nboxes,iper,boxsize, treecenters, isrcse, &
@@ -338,6 +337,7 @@ subroutine lfmm3d_mps(nd, eps, nmpole, cmpole, rmpole, mterms, &
   !$ time2=omp_get_wtime()
   if( ifprint .eq. 1 ) call prin2('time in fmm main=*', &
       time2-time1,1)
+
 
   !
   ! now unsort the local expansions
@@ -350,8 +350,7 @@ subroutine lfmm3d_mps(nd, eps, nmpole, cmpole, rmpole, mterms, &
     ijk = 1
     do j = 1,ilen
       do l = 1,nd
-        local(impole(isrc(i))+ijk-1) = &
-            localsort(impolesort(i)+ijk-1) 
+        local(impole(isrc(i))+ijk-1) = localsort(impolesort(i)+ijk-1) 
         ijk = ijk + 1
       end do
     end do
@@ -367,7 +366,7 @@ end subroutine lfmm3d_mps
 
 subroutine lfmm3dmain_mps(nd, eps, &
     nmpole, cmpolesort, rmpolesort, mtermssort, mpolesort, &
-    impolesort,nexpc,ntj, localsort, &
+    impolesort, localsort, &
     iaddr, rmlexp, lmptot, mptemp, mptemp2, lmptemp, &
     itree, ltree, ipointer, ndiv, nlevels, &
     nboxes, iper, boxsize, centers, isrcse, &
@@ -378,18 +377,17 @@ subroutine lfmm3dmain_mps(nd, eps, &
 
       double precision sourcesort(3,nmpole)
 
-      integer ntj,nexpc
-      integer ifnear
-      double precision expcsort(3,nexpc)
-      double complex tsort(nd,0:ntj,-ntj:ntj,nexpc)
-      double precision scjsort(nexpc)
+  !    integer ifnear
+  !    double precision expcsort(3,nexpc)
+  !    double complex tsort(nd,0:ntj,-ntj:ntj,nexpc)
+  !    double precision scjsort(nexpc)
 
     !
     ! INPUT variables
     !
     integer :: nd, ndiv,nlevels
     double precision :: eps
-    double complex :: zk
+    !double complex :: zk
 
     ! input multipole stuff
     integer :: nmpole, mtermssort(nmpole)
@@ -404,11 +402,6 @@ subroutine lfmm3dmain_mps(nd, eps, &
       double precision rmlexp(lmptot)
       double precision mptemp(lmptemp)
       double precision mptemp2(lmptemp)
-
-  !
-  ! OUTPUT variables
-  !
-    double complex :: localsort(*)
 
 
       integer ifcharge,ifdipole,ifpgh
@@ -432,6 +425,12 @@ subroutine lfmm3dmain_mps(nd, eps, &
       integer, allocatable :: nlist2(:),list2(:,:)
       integer, allocatable :: nlist3(:),list3(:,:)
       integer, allocatable :: nlist4(:),list4(:,:)
+
+
+  ! OUTPUT variables
+  !
+    double complex :: localsort(*)
+
 
       integer nuall,ndall,nnall,nsall,neall,nwall
       integer nu1234,nd5678,nn1256,ns3478,ne1357,nw2468
@@ -564,7 +563,7 @@ subroutine lfmm3dmain_mps(nd, eps, &
 !     Prints timing breakdown, list information, 
 !     and other things if ifprint=2.
 !       
-      ifprint=0
+      ifprint=1
 
 
       ifcharge = 1
@@ -760,15 +759,15 @@ subroutine lfmm3dmain_mps(nd, eps, &
 !     ... set the expansion coefficients to zero
 !
 !C$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(i,j,k,idim)
-      do i=1,nexpc
-        do k=-ntj,ntj
-          do j = 0,ntj
-            do idim=1,nd
-              tsort(idim,j,k,i)=0
-            enddo
-          enddo
-        enddo
-      enddo
+!      do i=1,nexpc
+!        do k=-ntj,ntj
+!         do j = 0,ntj
+!            do idim=1,nd
+!              tsort(idim,j,k,i)=0
+!            enddo
+!          enddo
+!        enddo
+!      enddo
 !C$OMP END PARALLEL DO
 
        
@@ -793,21 +792,21 @@ subroutine lfmm3dmain_mps(nd, eps, &
 
 !      set scjsort
 
-      do ilev=0,nlevels
+!      do ilev=0,nlevels
 !C$OMP PARALLEL DO DEFAULT(SHARED)
 !C$OMP$PRIVATE(ibox,nchild,istart,iend,i)
-         do ibox=laddr(1,ilev),laddr(2,ilev)
-            nchild = itree(ipointer(4)+ibox-1)
-            if(nchild.gt.0) then
-               istart = iexpcse(1,ibox)
-               iend = iexpcse(2,ibox) 
-               do i=istart,iend
-                  scjsort(i) = rscales(ilev)
-               enddo
-            endif
-         enddo
+!         do ibox=laddr(1,ilev),laddr(2,ilev)
+!            nchild = itree(ipointer(4)+ibox-1)
+!            if(nchild.gt.0) then
+!               istart = iexpcse(1,ibox)
+!               iend = iexpcse(2,ibox) 
+!               do i=istart,iend
+!                  scjsort(i) = rscales(ilev)
+ !              enddo
+!            endif
+!         enddo
 !C$OMP END PARALLEL DO
-      enddo
+!      enddo
 
 
 !    initialize legendre function evaluation routines
@@ -904,21 +903,7 @@ subroutine lfmm3dmain_mps(nd, eps, &
                         npts0,gboxsubcenters(1,i,ithd),nterms(ilev+1),&
                         gboxmexp(1,i,jbox),wlege,nlege)          
                     endif
-                    if(ifcharge.eq.0.and.ifdipole.eq.1) then
-                      call l3dformmpd(nd,rscales(ilev+1),&
-                        gboxsort(1,jstart,ithd),&
-                        gboxdpsort(1,1,jstart,ithd),&
-                        npts0,gboxsubcenters(1,i,ithd),nterms(ilev+1),&
-                        gboxmexp(1,i,jbox),wlege,nlege)          
-                    endif
-                    if(ifcharge.eq.1.and.ifdipole.eq.1) then
-                      call l3dformmpcd(nd,rscales(ilev+1),&
-                        gboxsort(1,jstart,ithd),&
-                        gboxcgsort(1,jstart,ithd),&
-                        gboxdpsort(1,1,jstart,ithd),&
-                        npts0,gboxsubcenters(1,i,ithd),nterms(ilev+1),&
-                        gboxmexp(1,i,jbox),wlege,nlege)          
-                    endif
+
                     call l3dmpmp(nd,rscales(ilev+1),&
                         gboxsubcenters(1,i,ithd),gboxmexp(1,i,jbox),&
                         nterms(ilev+1),rscales(ilev),centers(1,ibox),&
@@ -1520,8 +1505,8 @@ subroutine lfmm3dmain_mps(nd, eps, &
 
                   call l3dlocloc(nd,rscales(ilev),&
                   centers(1,ibox),rmlexp(iaddr(2,ibox)),&
-                  nterms(ilev),rscales(ilev),expcsort(1,i),&
-                  tsort(1,0,-ntj,i),ntj,dc,lca)
+                  nterms(ilev),rmpolesort(i), cmpolesort(1,i), &
+                  localsort(impolesort(i)), mtermssort(i), dc,lca)
                enddo
             endif
          enddo
@@ -1532,6 +1517,18 @@ subroutine lfmm3dmain_mps(nd, eps, &
       call cpu_time(time2)
 !C$        time2=omp_get_wtime()
       timeinfo(5) = time2 - time1
+
+
+
+
+
+
+
+
+
+
+
+      
 
 
       if(ifprint .ge. 1) call prinf('=== STEP 6 (direct) =====*',i,0)
@@ -1614,6 +1611,33 @@ subroutine lfmm3dmain_mps(nd, eps, &
   do i = 1,8
     d = d + timeinfo(i)
   enddo
+
+
+  if (ifprint .eq. 1) then
+    print *
+    print *
+    write(6,'(a)') '                             Time    Perct'
+    write(6,'(a,f6.3,a,f6.2,a)') 'Step 1: SHIFT MPs           ',&
+        timeinfo(1), ' ', timeinfo(1)/d*100, '%'
+    write(6,'(a,f6.3,a,f6.2,a)') 'Step 2: FORM LOCAL (LIST 3) ',&
+        timeinfo(2), ' ', timeinfo(2)/d*100, '%'
+    write(6,'(a,f6.3,a,f6.2,a)') 'Step 3: MERGE MPs           ',&
+        timeinfo(3), ' ', timeinfo(3)/d*100, '%'
+    write(6,'(a,f6.3,a,f6.2,a)') 'Step 4: MP to LOCAL         ',&
+        timeinfo(4), ' ', timeinfo(4)/d*100, '%'
+    write(6,'(a,f6.3,a,f6.2,a)') 'Step 5: SPLIT LOCAL         ',&
+        timeinfo(5), ' ', timeinfo(5)/d*100, '%'
+    write(6,'(a,f6.3,a,f6.2,a)') 'Step 6: MP EVAL (LIST 4)    ',&
+        timeinfo(6), ' ', timeinfo(6)/d*100, '%'
+    write(6,'(a,f6.3,a,f6.2,a)') 'Step 7: EVAL LOCALS         ',&
+        timeinfo(7), ' ', timeinfo(7)/d*100, '%'
+    write(6,'(a,f6.3,a,f6.2,a)') 'Step 8: DIRECT EVAL         ',&
+        timeinfo(8), ' ', timeinfo(8)/d*100, '%'
+    write(6,'(a,f6.3)') 'Total time required         ', d
+    print *
+    print *
+  end if
+
 
       if(ifprint.ge.1) call prin2('sum(timeinfo)=*',d,1)
 
