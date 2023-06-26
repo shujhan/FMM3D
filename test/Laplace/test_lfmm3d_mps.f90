@@ -211,7 +211,7 @@ program test_lfmm3d_mp2loc
   ifpgh = 1
   ntarg = 0
   ifpghtarg = 0
-  nd = 0
+  !nd = 1
   ier = 0
 !  call lfmm3d(nd, eps, ns, source, ifcharge, &
 !      charge, ifdipole, dipvec, iper, ifpgh, pot, grad, hess, ntarg, &
@@ -254,7 +254,7 @@ program test_lfmm3d_mp2loc
   call lfmm3d_mps(nd, eps,  &
       nc, centers, rscales, nterms, mpole, impole, local,ier)
 
-  call prin2('from lfmm3d_mps, local expansions = *', local, 10)
+! call prin2('from lfmm3d_mps, local expansions = *', local, 10)
 
 
   call zinitialize(nd*nc, pot2)
