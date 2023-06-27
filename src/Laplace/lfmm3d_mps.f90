@@ -1,26 +1,3 @@
-!
-!--------------------------------------------------------------------
-!
-! A fast multi-particle scattering code, based on the code in
-! hfmm3d.f of the Flatiron Institute FMM3D library.
-!
-! Original skeleton code by Manas Rachh, Leslie Greengard, etc.
-! FMPS re-write by Mike O'Neil, 2019
-! oneil@cims.nyu.edu
-!
-! The input is assumed to be a collection of multipole expansions,
-! each of arbitrary order, and the output is a collection of local
-! expansions at the same locations (and of the same order) which take
-! into account the potentials from all other multipole expansions.
-!
-! It is assume that all multipole expansions are well-separated, so
-! that even those in LIST 1 can be translated.
-!
-! We use exp(ikr)/r for the Green's function., without the 1/4\pi
-! scaling.
-!
-!--------------------------------------------------------------------
-!
 
 subroutine lfmm3d_mps(nd, eps, nmpole, cmpole, rmpole, mterms, &
     mpole, impole, local, ier)
@@ -91,7 +68,7 @@ subroutine lfmm3d_mps(nd, eps, nmpole, cmpole, rmpole, mterms, &
   integer, allocatable :: itree(:)
   double precision :: targ(3)
   double precision, allocatable :: treecenters(:,:),boxsize(:)
-  integer, allocatable :: isrcse(:,:),itargse(:,:),iexpcse(:,:)
+  integer, allocatable :: isrcse(:,:)
   integer, allocatable :: isrc(:)
   integer iexpc,itarg
 
@@ -205,7 +182,7 @@ subroutine lfmm3d_mps(nd, eps, nmpole, cmpole, rmpole, mterms, &
      treecenters,boxsize)
       
 
-  allocate(isrcse(2,nboxes),itargse(2,nboxes),iexpcse(2,nboxes))
+  allocate(isrcse(2,nboxes))
   allocate(isrc(nmpole))
 
   call pts_tree_sort(nmpole,cmpole,itree,ltree,nboxes,nlevels, &
@@ -374,22 +351,19 @@ subroutine lfmm3dmain_mps(nd, eps, &
       implicit none
 
 
-
-      double precision sourcesort(3,nmpole)
-
-
     !
     ! INPUT variables
     !
     integer :: nd, ndiv,nlevels
     double precision :: eps
-    !double complex :: zk
+
 
     ! input multipole stuff
     integer :: nmpole, mtermssort(nmpole)
     double precision :: cmpolesort(3,nmpole), rmpolesort(nmpole)
     double complex :: mpolesort(*)
     integer :: impolesort(nmpole)
+    integer nboxes
 
 
       ! storage stuff for tree and multipole expansions
@@ -400,8 +374,7 @@ subroutine lfmm3dmain_mps(nd, eps, &
       double precision mptemp2(lmptemp)
 
 
-      integer ifcharge,ifdipole,ifpgh
-      integer ifinit2,nquad2
+      integer ifpgh
 
       double precision thresh
        
@@ -413,10 +386,10 @@ subroutine lfmm3dmain_mps(nd, eps, &
       integer nterms(0:nlevels)
       integer *8 ipointer(8),ltree
       integer itree(ltree)
-      integer nboxes
+
       double precision rscales(0:nlevels)
       double precision boxsize(0:nlevels)
-      integer isrcse(2,nboxes),itargse(2,nboxes),iexpcse(2,nboxes)
+      integer isrcse(2,nboxes)
       integer, allocatable :: nlist1(:),list1(:,:)
       integer, allocatable :: nlist2(:),list2(:,:)
       integer, allocatable :: nlist3(:),list3(:,:)
@@ -444,25 +417,23 @@ subroutine lfmm3dmain_mps(nd, eps, &
       integer, allocatable :: w2(:,:),w4(:,:),w6(:,:),w8(:,:)
 
 !     temp variables
-      integer i,j,k,l,ii,jj,kk,ll,m,idim,igbox
-      integer ibox,jbox,ilev,npts,npts0,kbox,dir
+      integer i,j,k,l,ii,jj,kk,ll,m,idim
+      integer ibox,jbox,ilev,npts,npts0
       integer nchild
 
-      integer istart,iend,istarts,iends,iloc
-      integer istartt,iendt,istarte,iende
-      integer isstart,isend,jsstart,jsend
+      integer istart,iend,iloc
       integer jstart,jend
 
       integer ifprint
 
       double precision d,time1,time2,second,omp_get_wtime
-      double precision pottmp,fldtmp(3),hesstmp(3)
+
 
 !     PW variables
-      integer nexpmax, nlams, nmax, nthmax, nphmax,nmax2,nmaxt
+      integer nlams, nmax, nthmax, nphmax,nmaxt
       integer lca, mt,ltot
       double precision, allocatable :: carray(:,:), dc(:,:)
-      double precision, allocatable :: cs(:,:),fact(:),rdplus(:,:,:)
+      double precision, allocatable :: rdplus(:,:,:)
       double precision, allocatable :: rdminus(:,:,:), rdsq3(:,:,:)
       double precision, allocatable :: rdmsq3(:,:,:)
   
@@ -495,31 +466,29 @@ subroutine lfmm3dmain_mps(nd, eps, &
       integer nterms_eval(4,0:nlevels)
 
       double precision radius
-      double precision, allocatable :: xnodes(:),wts(:)
 
       integer max_nodes
 
 
       integer mnlist1, mnlist2,mnlist3,mnlist4,mnbors
-      double complex eye, ztmp
-      double precision alphaj
-      integer ctr,nn,iptr1,iptr2
+
+      integer nn
       double precision, allocatable :: rscpow(:)
-      double precision pi,errtmp
-      double complex ima
+      double precision pi
 
       double precision ctmp(3)
 
 !     list 3 variables
       double complex, allocatable :: iboxlexp(:,:,:)
       double precision, allocatable :: iboxsubcenters(:,:,:)
-      double precision, allocatable :: iboxpot(:,:,:)
-      double precision, allocatable :: iboxgrad(:,:,:,:)
-      double precision, allocatable :: iboxhess(:,:,:,:)
-      double precision, allocatable :: iboxsrc(:,:,:)
+
       integer, allocatable :: iboxsrcind(:,:)
+      integer, allocatable :: iboxisort(:,:)
+      integer, allocatable :: iboxisort_tmp(:,:)
       integer, allocatable :: iboxfl(:,:,:)
 !     end of list 3 variables
+
+
 !     list 4 variables
       integer cntlist4
       integer, allocatable :: list4ct(:),ilist4(:)
@@ -527,21 +496,21 @@ subroutine lfmm3dmain_mps(nd, eps, &
       double complex, allocatable :: gboxwexp(:,:,:,:,:)
       double complex, allocatable :: pgboxwexp(:,:,:,:)
       double precision, allocatable :: gboxsubcenters(:,:,:)
-      double precision, allocatable :: gboxsort(:,:,:)
+      integer, allocatable :: gboxisort(:,:)
+      integer, allocatable :: gboxisort_tmp(:,:)
+
       integer, allocatable :: gboxind(:,:)
       integer, allocatable :: gboxfl(:,:,:)
-      double precision, allocatable :: gboxcgsort(:,:,:)
-      double precision, allocatable :: gboxdpsort(:,:,:,:)
+
 !     end of list 4 variables
 
 !
 !   hessian variables
 !
-      double precision, allocatable :: scarray(:,:)
 
       integer *8 bigint
       integer iert
-      data ima/(0.0d0,1.0d0)/
+
 
       integer nthd,ithd
       integer omp_get_max_threads,omp_get_thread_num
@@ -562,8 +531,8 @@ subroutine lfmm3dmain_mps(nd, eps, &
       ifprint=1
 
 
-      ifcharge = 1
-      ifdipole = 0
+
+
       ifpgh = 1
 !
 !   initialize various tree lists
@@ -650,12 +619,7 @@ subroutine lfmm3dmain_mps(nd, eps, &
       call rlscini(rlsc,nlams,rlams,nmax)
 
 
-      nn = 10*(nmax+2)**2
-      allocate(scarray(nn,0:nlevels))
 
-      do ilev=0,nlevels
-        call l3dtaevalhessdini(nterms(ilev),scarray(1,ilev))
-      enddo
 
 !     Compute total number of plane waves
       nexptotp = 0
@@ -720,51 +684,9 @@ subroutine lfmm3dmain_mps(nd, eps, &
 !    compute array of factorials
 
      
-      nmax2 = 2*nmax
-      allocate(fact(0:nmax2),cs(0:nmax,-nmax:nmax))
-      
-      d = 1
-      fact(0) = d
-      do i=1,nmax2
-        d=d*sqrt(i+0.0d0)
-        fact(i) = d
-      enddo
-
-      cs(0,0) = 1.0d0
-      do l=1,nmax
-        do m=0,l
-          cs(l,m) = ((-1)**l)/(fact(l-m)*fact(l+m))
-          cs(l,-m) = cs(l,m)
-        enddo
-      enddo
-
-
-
-
-
-  max_nodes = 10000
-  allocate(xnodes(max_nodes))
-  allocate(wts(max_nodes))
-
-
-
       
       if(ifprint.ge.1) call prin2('end of generating plane wave info*',i,0)
-!
-!
-!     ... set the expansion coefficients to zero
-!
-!C$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(i,j,k,idim)
-!      do i=1,nexpc
-!        do k=-ntj,ntj
-!         do j = 0,ntj
-!            do idim=1,nd
-!              tsort(idim,j,k,i)=0
-!            enddo
-!          enddo
-!        enddo
-!      enddo
-!C$OMP END PARALLEL DO
+
 
        
       do i=1,6
@@ -786,23 +708,6 @@ subroutine lfmm3dmain_mps(nd, eps, &
       enddo
 
 
-!      set scjsort
-
-!      do ilev=0,nlevels
-!C$OMP PARALLEL DO DEFAULT(SHARED)
-!C$OMP$PRIVATE(ibox,nchild,istart,iend,i)
-!         do ibox=laddr(1,ilev),laddr(2,ilev)
-!            nchild = itree(ipointer(4)+ibox-1)
-!            if(nchild.gt.0) then
-!               istart = iexpcse(1,ibox)
-!               iend = iexpcse(2,ibox) 
-!               do i=istart,iend
-!                  scjsort(i) = rscales(ilev)
- !              enddo
-!            endif
-!         enddo
-!C$OMP END PARALLEL DO
-!      enddo
 
 
   ltot = 0
@@ -868,10 +773,9 @@ subroutine lfmm3dmain_mps(nd, eps, &
 !C$OMP END PARALLEL DO
 
       allocate(gboxind(nmaxt,nthd))
-      allocate(gboxsort(3,nmaxt,nthd))
+      allocate(gboxisort(nmaxt,nthd))
+      allocate(gboxisort_tmp(nmaxt,nthd))
       allocate(gboxwexp(nd,nexptotp,6,8,nthd))
-      allocate(gboxcgsort(nd,nmaxt,nthd))
-      allocate(gboxdpsort(nd,3,nmaxt,nthd))
 
 !   note gboxmexp is an array not scalar
       pgboxwexp=0d0
@@ -899,12 +803,19 @@ subroutine lfmm3dmain_mps(nd, eps, &
               npts = iend-istart+1
 
               if(npts.gt.0) then
-                call subdividebox(sourcesort(1,istart),npts, &
+                call subdividebox(cmpolesort(1,istart),npts, &
                     centers(1,ibox),boxsize(ilev+1),&
                     gboxind(1,ithd),gboxfl(1,1,ithd),&
                     gboxsubcenters(1,1,ithd))
-                call dreorderf(3,npts,sourcesort(1,istart),&
-                    gboxsort(1,1,ithd),gboxind(1,ithd))
+
+
+                do i=istart,iend
+                  gboxisort_tmp(i-istart+1,ithd) = i
+                enddo
+
+                call ireorderf(1,npts,gboxisort_tmp(1,ithd),&
+                     gboxisort(1,ithd),gboxind(1,ithd))
+
 
                 do i=1,8
                   if(gboxfl(1,i,ithd).gt.0) then
@@ -912,13 +823,14 @@ subroutine lfmm3dmain_mps(nd, eps, &
                     jend=gboxfl(2,i,ithd)
                     npts0=jend-jstart+1
                     jbox=list4ct(ibox)
-                    if(ifcharge.eq.1.and.ifdipole.eq.0) then
-                      call l3dformmpc(nd,rscales(ilev+1),&
-                        gboxsort(1,jstart,ithd),&
-                        gboxcgsort(1,jstart,ithd),&
-                        npts0,gboxsubcenters(1,i,ithd),nterms(ilev+1),&
-                        gboxmexp(1,i,jbox),wlege,nlege)          
-                    endif
+
+                    do j = jstart,jend
+                      k = gboxisort(j,ithd)
+                      call l3dmpmp(nd,rmpolesort(k),cmpolesort(1,k), &
+                            mpolesort(impolesort(k)),mtermssort(k), &
+                            rscales(ilev+1),gboxsubcenters(1,i,ithd),&
+                            gboxmexp(1,i,jbox),nterms(ilev+1),dc,lca)  
+                    enddo        
 
                     call l3dmpmp(nd,rscales(ilev+1),&
                         gboxsubcenters(1,i,ithd),gboxmexp(1,i,jbox),&
@@ -1004,8 +916,9 @@ subroutine lfmm3dmain_mps(nd, eps, &
          enddo
 !C$OMP END PARALLEL DO
       enddo
-      deallocate(gboxfl,gboxsubcenters,gboxwexp,gboxcgsort)
-      deallocate(gboxdpsort,gboxind,gboxsort)
+      deallocate(gboxfl,gboxsubcenters,gboxwexp)
+      deallocate(gboxind,gboxisort,gboxisort_tmp)
+      deallocate(gboxmexp)
 
       call cpu_time(time2)
 !C$    time2=omp_get_wtime()
@@ -1024,16 +937,10 @@ subroutine lfmm3dmain_mps(nd, eps, &
 
   do ilev=2,nlevels
 
-    nquad2 = nterms(ilev)*2.5
-    nquad2 = max(6,nquad2)
-    ifinit2 = 1
-    call legewhts(nquad2,xnodes,wts,ifinit2)
 
     !!!!!!!!!
     ! this radius has a fudge factor in it, debug in future
     !!!!!!!!!
-    radius = boxsize(ilev)/2*sqrt(3.0d0)*1.5d0
-    
       !$omp parallel do default(shared) &
       !$omp   private(ibox,npts,istart,iend,nchild,i)
       do ibox = laddr(1,ilev),laddr(2,ilev)
@@ -1044,7 +951,7 @@ subroutine lfmm3dmain_mps(nd, eps, &
         
         nchild = itree(ipointer(4)+ibox-1)
 
-        if((npts.gt.0) .and. (nchild.eq.0)) then
+        if((npts.gt.0) .and. (nchild.eq.0).and.list4ct(ibox).eq.0) then
           
           do i = istart,iend
             call l3dmpmp(nd, rmpolesort(i), cmpolesort(1,i), &
@@ -1052,7 +959,7 @@ subroutine lfmm3dmain_mps(nd, eps, &
                 rscales(ilev), centers(1,ibox), &
                 rmlexp(iaddr(1,ibox)), nterms(ilev), &
                 dc,lca)
-          end do       
+          enddo       
         endif
       enddo
       !$omp end parallel do            
@@ -1144,20 +1051,15 @@ subroutine lfmm3dmain_mps(nd, eps, &
           iend = isrcse(2,ibox)
           npts = iend-istart+1
           if(npts.gt.nmaxt) nmaxt = npts
-
-          istart = itargse(1,ibox)
-          iend = itargse(2,ibox)
-          npts = iend - istart + 1
-          if(npts.gt.nmaxt) nmaxt = npts
         endif
       enddo
 !C$OMP END PARALLEL DO
 
       allocate(iboxsrcind(nmaxt,nthd))
-      allocate(iboxsrc(3,nmaxt,nthd))
-      allocate(iboxpot(nd,nmaxt,nthd))
-      allocate(iboxgrad(nd,3,nmaxt,nthd))
-      allocate(iboxhess(nd,6,nmaxt,nthd))
+      allocate(iboxisort(nmaxt,nthd))
+      allocate(iboxisort_tmp(nmaxt,nthd))
+
+
 
       do ilev=2,nlevels
         allocate(iboxlexp(nd*(nterms(ilev)+1)*(2*nterms(ilev)+1),8,nthd))
@@ -1269,17 +1171,11 @@ subroutine lfmm3dmain_mps(nd, eps, &
            ithd = ithd + 1
            npts = 0
 
-           istart = iexpcse(1,ibox) 
-           iend = iexpcse(2,ibox) 
-           npts = npts + iend-istart+1
-
            nchild = itree(ipointer(4)+ibox-1)
 
-           if(ifpgh.gt.0) then
-             istart = isrcse(1,ibox) 
-             iend = isrcse(2,ibox) 
-             npts = npts + iend-istart+1
-           endif
+           istart = isrcse(1,ibox) 
+           iend = isrcse(2,ibox) 
+           npts = npts + iend-istart+1
 
 
            if(npts.gt.0.and.nchild.gt.0) then
@@ -1403,44 +1299,49 @@ subroutine lfmm3dmain_mps(nd, eps, &
                   mexppall(1,1,1,ithd),mexppall(1,1,2,ithd),rdminus,&
                   xshift,yshift,zshift,fexpback,rlsc,rscpow)
 
-              if(ifpgh.eq.1) then
                 istart = isrcse(1,ibox) 
                 iend = isrcse(2,ibox) 
                 npts = iend-istart+1
                 if(npts.gt.0) then
-                  call subdividebox(sourcesort(1,istart),npts,&
+                  call subdividebox(cmpolesort(1,istart),npts,&
                          centers(1,ibox),boxsize(ilev),&
                         iboxsrcind(1,ithd),iboxfl(1,1,ithd),&
                          iboxsubcenters(1,1,ithd))
-                  call dreorderf(3,npts,sourcesort(1,istart),&
-                         iboxsrc(1,1,ithd),iboxsrcind(1,ithd))
+                 do i=istart,iend
+                   iboxisort_tmp(i-istart+1,ithd) = i
+                 enddo
+
+                 call ireorderf(1,npts,iboxisort_tmp(1,ithd),&
+                      iboxisort(1,ithd),iboxsrcind(1,ithd))
 
                   do i=1,8
                     if(iboxfl(1,i,ithd).gt.0) then
                       jstart=iboxfl(1,i,ithd)
                       jend=iboxfl(2,i,ithd)
                       npts0=jend-jstart+1
-                      if(npts0.gt.0) then
-                        call l3dtaevalp(nd,rscales(ilev),&
-                          iboxsubcenters(1,i,ithd),iboxlexp(1,i,ithd),&
-                          nterms(ilev),iboxsrc(1,jstart,ithd),npts0,&
-                          iboxpot(1,jstart,ithd),wlege,nlege)
-                      endif
+                      do j = jstart,jend
+                         k = iboxisort(j,ithd)
+                         call l3dlocloc(nd,rscales(ilev),&
+                              iboxsubcenters(1,i,ithd),iboxlexp(1,i,ithd),&
+                              nterms(ilev),&
+                              rmpolesort(k),cmpolesort(1,k),&
+                              localsort(impolesort(k)), mtermssort(k),&
+                              dc,lca)
+                      enddo
                     endif
                   enddo
-                endif
               endif
             endif
          enddo
 !C$OMP END PARALLEL DO   
 
-
         deallocate(iboxlexp)  
       enddo
 
 
-      deallocate(iboxsrcind,iboxsrc,iboxpot,iboxgrad,iboxhess)
+      deallocate(iboxsrcind,iboxisort,iboxisort_tmp)
       deallocate(iboxsubcenters,iboxfl)
+      deallocate(pgboxwexp)
       deallocate(uall,dall,nall,sall,eall,wall)
       deallocate(u1234,d5678,n1256,s3478)
       deallocate(e1357,w2468,n12,n56,s34,s78)
@@ -1451,44 +1352,6 @@ subroutine lfmm3dmain_mps(nd, eps, &
 !C$        time2=omp_get_wtime()
       timeinfo(3) = timeinfo(3) + time2-time1
 
-
-
-!
-  ! Step 6: Ship multipole expansions to local expansion in List 4
-  !
-  if(ifprint.ge.1) call prinf('=== step 6 (mp eval) ===*',i,0)
-  call cpu_time(time1)
-  !$ time1=omp_get_wtime()
-
-  do ilev=1,nlevels
-
-    !$omp parallel do default(shared) &
-    !$omp   private(ibox,istart,iend,npts,i,jbox,j) &
-    !$omp   schedule(dynamic)
-    do ibox=laddr(1,ilev),laddr(2,ilev)
-      istart = isrcse(1,ibox) 
-      iend = isrcse(2,ibox) 
-
-      npts = iend-istart+1
-
-      do i=1,nlist3(ibox)
-        jbox = list3(i,ibox) 
-        do j = istart,iend
-          call l3dmploc(nd,rscales(ilev+1), centers(1,jbox), &
-              rmlexp(iaddr(1,jbox)),nterms(ilev+1), &
-              rmpolesort(j), cmpolesort(1,j), &
-              localsort(impolesort(j)), mtermssort(j), &
-              dc,lca)
-        end do
-      enddo
-    enddo
-    !$omp end parallel do          
-
-  enddo
-
-  call cpu_time(time2)
-  !$ time2=omp_get_wtime()
-  timeinfo(6) = time2-time1
 
 
 
@@ -1505,16 +1368,9 @@ subroutine lfmm3dmain_mps(nd, eps, &
 !C$OMP$PRIVATE(ibox,i,jbox,istart,iend,npts)
          do ibox = laddr(1,ilev),laddr(2,ilev)
 
-            npts = 0
-            istart = iexpcse(1,ibox) 
-            iend = iexpcse(2,ibox) 
-            npts = npts + iend-istart+1
-
-            if(ifpgh.gt.0) then
                istart = isrcse(1,ibox)
                iend = isrcse(2,ibox) 
                npts = npts + iend-istart+1
-            endif
 
             if(npts.gt.0) then
                do i=1,8
@@ -1538,9 +1394,6 @@ subroutine lfmm3dmain_mps(nd, eps, &
       if(ifprint.ge.1) call prinf('=== step 5 (eval lo) ===*',i,0)
 
 
-!     ... step 6, evaluate all local expansions
-
-
       call cpu_time(time1)
 !C$        time1=omp_get_wtime()
 
@@ -1559,8 +1412,8 @@ subroutine lfmm3dmain_mps(nd, eps, &
             if(nchild.eq.0) then 
                istart = isrcse(1,ibox) 
                iend = isrcse(2,ibox) 
+               npts = iend - istart + 1
                do i=istart,iend
-
                   call l3dlocloc(nd,rscales(ilev),&
                   centers(1,ibox),rmlexp(iaddr(2,ibox)),&
                   nterms(ilev),rmpolesort(i), cmpolesort(1,i), &
@@ -1584,12 +1437,6 @@ subroutine lfmm3dmain_mps(nd, eps, &
 
   do ilev=0,nlevels
 
-    nquad2 = nterms(ilev)*2
-    nquad2 = max(6,nquad2)
-    ifinit2 = 1
-    call legewhts(nquad2, xnodes, wts, ifinit2)
-    radius = boxsize(ilev)/2*sqrt(3.0d0)/2/2
-
     !
     ! do final mploc translations for nearfield, which are assumed to
     ! be valid translations, despite them being in the nearfield
@@ -1597,14 +1444,14 @@ subroutine lfmm3dmain_mps(nd, eps, &
 
 
   !  !$omp parallel do default(shared) &
-  !  !$omp   private(ibox,istarts,iends,npts0,i) &
+  !  !$omp   private(ibox,istart,iend,npts0,i) &
   !  !$omp   private(jbox,jstart,jend,npts,d,j,iloc)
     do ibox = laddr(1,ilev),laddr(2,ilev)
-      istarts = isrcse(1,ibox) 
-      iends = isrcse(2,ibox)
-      npts0 = iends-istarts+1
+      istart = isrcse(1,ibox) 
+      iend = isrcse(2,ibox)
+      npts0 = iend-istart+1
 
-      do iloc = istarts,iends
+      do iloc = istart,iend
 
         do i=1,nlist1(ibox)
           jbox = list1(i,ibox) 
@@ -1626,22 +1473,10 @@ subroutine lfmm3dmain_mps(nd, eps, &
                   rmpolesort(iloc), cmpolesort(1,iloc), &
                   localsort(impolesort(iloc)), mtermssort(iloc), &
                   dc,lca)
-            else
-              if (j .ne. iloc) then
-                print *, 'two MP centers closer than thresh... '
-                print *, 'thresh = ', thresh
-                print *, 'bombing code!!'
-                stop
-              end if
-            end if
-
-          end do
-
-
+            endif
+          enddo
         enddo
-      end do
-
-
+      enddo
     enddo
   !  !$omp end parallel do       
 
@@ -1650,11 +1485,11 @@ subroutine lfmm3dmain_mps(nd, eps, &
   
   call cpu_time(time2)
   !$ time2=omp_get_wtime()
-  timeinfo(8) = time2-time1
+  timeinfo(6) = time2-time1
 
   
   d = 0
-  do i = 1,8
+  do i = 1,6
     d = d + timeinfo(i)
   enddo
 
@@ -1675,10 +1510,6 @@ subroutine lfmm3dmain_mps(nd, eps, &
         timeinfo(5), ' ', timeinfo(5)/d*100, '%'
     write(6,'(a,f6.3,a,f6.2,a)') 'Step 6: MP EVAL (LIST 4)    ',&
         timeinfo(6), ' ', timeinfo(6)/d*100, '%'
-    write(6,'(a,f6.3,a,f6.2,a)') 'Step 7: EVAL LOCALS         ',&
-        timeinfo(7), ' ', timeinfo(7)/d*100, '%'
-    write(6,'(a,f6.3,a,f6.2,a)') 'Step 8: DIRECT EVAL         ',&
-        timeinfo(8), ' ', timeinfo(8)/d*100, '%'
     write(6,'(a,f6.3)') 'Total time required         ', d
     print *
     print *
