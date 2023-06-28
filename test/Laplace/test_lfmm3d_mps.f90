@@ -212,12 +212,12 @@ program test_lfmm3d_mp2loc
   ifpghtarg = 0
   nd = 1
   ier = 0
-  call lfmm3d(nd, eps, ns, source, ifcharge, &
-      charge, ifdipole, dipvec, iper, ifpgh, pot, grad, hess, ntarg, &
-    targ, ifpghtarg, pottarg, gradtarg, hesstarg, ier)
+ ! call lfmm3d(nd, eps, ns, source, ifcharge, &
+!      charge, ifdipole, dipvec, iper, ifpgh, pot, grad, hess, ntarg, &
+ !   targ, ifpghtarg, pottarg, gradtarg, hesstarg, ier)
 
 
-!  call lfmm3d_s_c_p(eps,ns,source,charge,pot,ier)
+  call lfmm3d_s_c_p(eps,ns,source,charge,pot,ier)
   
   call prin2('via fmm, potential = *', pot, 10)
 
@@ -303,5 +303,4 @@ end program
          end do
          return
        end subroutine zinitialize
-
 

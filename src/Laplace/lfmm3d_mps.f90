@@ -1500,15 +1500,15 @@ subroutine lfmm3dmain_mps(nd, eps, &
     write(6,'(a)') '                             Time    Perct'
     write(6,'(a,f6.3,a,f6.2,a)') 'Step 1: SHIFT MPs           ',&
         timeinfo(1), ' ', timeinfo(1)/d*100, '%'
-    write(6,'(a,f6.3,a,f6.2,a)') 'Step 2: FORM LOCAL (LIST 3) ',&
+    write(6,'(a,f6.3,a,f6.2,a)') 'Step 2: Merge mp             ',&
         timeinfo(2), ' ', timeinfo(2)/d*100, '%'
-    write(6,'(a,f6.3,a,f6.2,a)') 'Step 3: MERGE MPs           ',&
+    write(6,'(a,f6.3,a,f6.2,a)') 'Step 3: mp to loc+formta+mpeval',&
         timeinfo(3), ' ', timeinfo(3)/d*100, '%'
-    write(6,'(a,f6.3,a,f6.2,a)') 'Step 4: MP to LOCAL         ',&
+    write(6,'(a,f6.3,a,f6.2,a)') 'Step 4: split loc            ',&
         timeinfo(4), ' ', timeinfo(4)/d*100, '%'
-    write(6,'(a,f6.3,a,f6.2,a)') 'Step 5: SPLIT LOCAL         ',&
+    write(6,'(a,f6.3,a,f6.2,a)') 'Step 5: eval lo(loc to center)',&
         timeinfo(5), ' ', timeinfo(5)/d*100, '%'
-    write(6,'(a,f6.3,a,f6.2,a)') 'Step 6: MP EVAL (LIST 4)    ',&
+    write(6,'(a,f6.3,a,f6.2,a)') 'Step 6: direct                ',&
         timeinfo(6), ' ', timeinfo(6)/d*100, '%'
     write(6,'(a,f6.3)') 'Total time required         ', d
     print *
