@@ -80,9 +80,9 @@ program test_lfmm3d_mp2loc
         source(1,ijk) = h*i
         source(2,ijk) = h*j
         source(3,ijk) = h*k
-      end do
-    end do
-  end do
+      enddo
+    enddo
+  enddo
 
 
 
@@ -138,11 +138,10 @@ program test_lfmm3d_mp2loc
   do i=1,ns
     do idim = 1,nd
       charge(idim,i) = charge(idim,i)/dnorm
-    end do
-  end do
+    enddo
+  enddo
   
 
-  ! call prin2('min source separation = *', ssep, 1)
   
   shift = h/1000
   call prin2('shift = *', shift, 1)
@@ -150,9 +149,9 @@ program test_lfmm3d_mp2loc
     centers(1,i) = source(1,i) + shift
     centers(2,i) = source(2,i)
     centers(3,i) = source(3,i)
-  end do
+  enddo
 
-  !call prin2('centers = *', centers, 3*nc)
+
 
   !
   ! now form a multipole expansion at each center
@@ -164,7 +163,7 @@ program test_lfmm3d_mp2loc
   do i = 1,nc
     nterms(i) = ntm + 2*cos(pi/2*i)
     ntot = ntot + (nterms(i)+1)*(2*nterms(i)+1)
-  end do
+  enddo
 
   allocate(mpole(nd*ntot))
 
@@ -172,7 +171,7 @@ program test_lfmm3d_mp2loc
   do i = 1,nc-1
     ilen = (nterms(i)+1)*(2*nterms(i)+1)
     impole(i+1) = impole(i) + nd*ilen
-  end do
+  enddo
 
   
   nlege = 400
@@ -197,7 +196,7 @@ program test_lfmm3d_mp2loc
     call l3dformmpc(nd,rscale, source(1,i), charge(1,i), &
         ns1, centers(1,i), nterms(i), mpole(impole(i)), &
         wlege, nlege)
-  end do
+  enddo
 
 
 
@@ -211,25 +210,20 @@ program test_lfmm3d_mp2loc
   ifpgh = 1
   ntarg = 0
   ifpghtarg = 0
-  !nd = 1
+  nd = 1
   ier = 0
-!  call lfmm3d(nd, eps, ns, source, ifcharge, &
-!      charge, ifdipole, dipvec, iper, ifpgh, pot, grad, hess, ntarg, &
-!     targ, ifpghtarg, pottarg, gradtarg, hesstarg, ier)
+  call lfmm3d(nd, eps, ns, source, ifcharge, &
+      charge, ifdipole, dipvec, iper, ifpgh, pot, grad, hess, ntarg, &
+    targ, ifpghtarg, pottarg, gradtarg, hesstarg, ier)
 
 
-  call lfmm3d_s_c_p(eps,ns,source,charge,pot,ier)
+!  call lfmm3d_s_c_p(eps,ns,source,charge,pot,ier)
   
   call prin2('via fmm, potential = *', pot, 10)
 
 
 
 
-  !call comperr_vec(nd,zk,ns,source,ifcharge,charge,ifdipole, &
-  !  dipvec,ifpgh,pot,grad,nt,targ,ifpghtarg,pottarg, &
-   ! gradtarg,ntest,err)
-
-!call prin2('comperr, error = *', err, 1)
 
   
   allocate(local(nd*ntot))
@@ -248,9 +242,6 @@ program test_lfmm3d_mp2loc
   write(6,*) 
 
 
-  !call hfmm3d_mps(nd, eps, zk, &
-   !   nc, centers, rscales, nterms, mpole, impole, local,ier)
-
   call lfmm3d_mps(nd, eps,  &
       nc, centers, rscales, nterms, mpole, impole, local,ier)
 
@@ -264,7 +255,7 @@ program test_lfmm3d_mp2loc
         centers(1,i), local(impole(i)), &
         nterms(i), source(1,i), npts, pot2(1,i), &
         wlege, nlege)
-  end do
+  enddo
   
   call prin2('from lfmm3d_mps, potential = *', pot2, 10)
 
@@ -278,8 +269,8 @@ program test_lfmm3d_mp2loc
       err = err + abs(pot(i,j)-pot2(i,j))**2
       dnorm = dnorm + abs(pot(i,j))**2
       pot2(i,j) = pot2(i,j) - pot(i,j)
-    end do
-  end do
+    enddo
+  enddo
 
   !call prin2('diff = *', pot2, 2*nd*ns)
   !call prin2('err = *', err, 1)
@@ -297,218 +288,20 @@ program test_lfmm3d_mp2loc
     isuccess,' out of ',ntest,' tests in lap3d_mps testing suite'
   close(33)
 
-  
-  
-
   stop
 end program
 
 
 
-! ----------------------------------------------------------
-! 
-! This is the end of the debugging code.
-!
-! ----------------------------------------------------------
-subroutine prinmp(str, mpole, nterms)
-  implicit double precision (a-h,o-z)
-  character (len=*) :: str
-  double complex :: mpole(0:nterms, -nterms:nterms)
-  double complex :: tmp(-10000:10000)
 
-  print *, trim(str)
+       subroutine zinitialize(len, zs)
+         implicit double precision (a-h,o-z)
+         double precision :: zs(len)
+      
+         do i = 1,len
+           zs(i) = 0
+         end do
+         return
+       end subroutine zinitialize
 
-  do n = 0,nterms
-    print *
-    write(6,'(a,i2,a,i2,a,i2)') 'n = ', n, '  m = ', -n, '...', n
-    do m = -nterms,nterms
-      tmp(m) = mpole(n,m)
-    end do
-    call prin2('coefs = *', tmp(-n), 2*n+1)
-  end do
-  
-  return
-end subroutine prinmp
-
-
-
-subroutine zinitialize(len, zs)
-  implicit double precision (a-h,o-z)
-  double complex :: zs(len)
-
-  do i = 1,len
-    zs(i) = 0
-  end do
-  return
-end subroutine zinitialize
-
-
-
-
-
-subroutine comperr_vec(nd,zk,ns,source,ifcharge,charge,ifdipole, &
-    dipvec,ifpgh,pot,grad,nt,targ,ifpghtarg,pottarg, &
-    gradtarg,ntest,err)
-
-  implicit none
-  double complex zk
-  integer ns,nt,ifcharge,ifdipole,ifpgh,ifpghtarg
-
-  double precision source(3,*),targ(3,*)
-  double complex dipvec(nd,3,*)
-  double complex charge(nd,*)
-
-  double complex pot(nd,*),pottarg(nd,*),grad(nd,3,*), &
-      gradtarg(nd,3,*)
-
-  integer i,j,ntest,nd,idim
-
-  double precision err,ra
-
-  double complex potex(nd,ntest),gradex(nd,3,ntest), &
-      pottargex(nd,ntest),gradtargex(nd,3,ntest)
-
-  double precision thresh
-
-  err = 0 
-  do i=1,ntest
-    do idim=1,nd
-      potex(idim,i) = 0
-      pottargex(idim,i) = 0
-
-      gradex(idim,1,i) = 0
-      gradex(idim,2,i) = 0
-      gradex(idim,3,i) = 0
-
-      gradtargex(idim,1,i) = 0
-      gradtargex(idim,2,i) = 0
-      gradtargex(idim,3,i) = 0
-    enddo
-  enddo
-
-  thresh = 1.0d-16
-
-  if(ifcharge.eq.1.and.ifdipole.eq.0) then
-    if(ifpgh.eq.1) then
-      call l3ddirectcp(nd,source,charge,ns,source,ntest, &
-          potex,thresh)
-    endif
-
-    if(ifpgh.eq.2) then
-      call l3ddirectcg(nd,source,charge,ns,source,ntest, &
-          potex,gradex,thresh)
-    endif
-
-    if(ifpghtarg.eq.1) then
-      call l3ddirectcp(nd,source,charge,ns,targ,ntest, &
-          pottargex,thresh)
-    endif
-
-    if(ifpghtarg.eq.2) then
-      call l3ddirectcg(nd,source,charge,ns,targ,ntest, &
-          pottargex,gradtargex,thresh)
-    endif
-  endif
-
-  if(ifcharge.eq.0.and.ifdipole.eq.1) then
-    if(ifpgh.eq.1) then
-      call l3ddirectdp(nd,source,dipvec, &
-          ns,source,ntest,potex,thresh)
-    endif
-
-    if(ifpgh.eq.2) then
-      call l3ddirectdg(nd,source,dipvec, &
-          ns,source,ntest,potex,gradex,thresh)
-    endif
-
-    if(ifpghtarg.eq.1) then
-      call l3ddirectdp(nd,source,dipvec, &
-          ns,targ,ntest,pottargex,thresh)
-    endif
-
-    if(ifpghtarg.eq.2) then
-      call l3ddirectdg(nd,source,dipvec, &
-          ns,targ,ntest,pottargex,gradtargex,thresh)
-    endif
-  endif
-
-  if(ifcharge.eq.1.and.ifdipole.eq.1) then
-    if(ifpgh.eq.1) then
-      call l3ddirectcdp(nd,source,charge,dipvec, &
-          ns,source,ntest,potex,thresh)
-    endif
-
-    if(ifpgh.eq.2) then
-      call l3ddirectcdg(nd,source,charge,dipvec, &
-          ns,source,ntest,potex,gradex,thresh)
-    endif
-
-    if(ifpghtarg.eq.1) then
-      call l3ddirectcdp(nd,source,charge,dipvec, &
-          ns,targ,ntest,pottargex,thresh)
-    endif
-
-    if(ifpghtarg.eq.2) then
-      call l3ddirectcdg(nd,source,charge,dipvec, &
-          ns,targ,ntest,pottargex,gradtargex,thresh)
-    endif
-  endif
-
-  err = 0
-  ra = 0
-
-  if(ifpgh.eq.1) then
-    do i=1,ntest
-      do idim=1,nd
-        ra = ra + abs(potex(idim,i))**2
-        err = err + abs(pot(idim,i)-potex(idim,i))**2
-      enddo
-    enddo
-  endif
-
-  if(ifpgh.eq.2) then
-    do i=1,ntest
-      do idim=1,nd
-        ra = ra + abs(potex(idim,i))**2
-        ra = ra + abs(gradex(idim,1,i))**2
-        ra = ra + abs(gradex(idim,2,i))**2
-        ra = ra + abs(gradex(idim,3,i))**2
-
-        err = err + abs(pot(idim,i)-potex(idim,i))**2
-        err = err + abs(grad(idim,1,i)-gradex(idim,1,i))**2
-        err = err + abs(grad(idim,2,i)-gradex(idim,2,i))**2
-        err = err + abs(grad(idim,3,i)-gradex(idim,3,i))**2
-      enddo
-    enddo
-  endif
-
-
-  if(ifpghtarg.eq.1) then
-    do i=1,ntest
-      do idim=1,nd
-        ra = ra + abs(pottargex(idim,i))**2
-        err = err + abs(pottarg(idim,i)-pottargex(idim,i))**2
-      enddo
-    enddo
-  endif
-
-  if(ifpghtarg.eq.2) then
-    do i=1,ntest
-      do idim=1,nd
-        ra = ra + abs(pottargex(idim,i))**2
-        ra = ra + abs(gradtargex(idim,1,i))**2
-        ra = ra + abs(gradtargex(idim,2,i))**2
-        ra = ra + abs(gradtargex(idim,3,i))**2
-
-        err = err + abs(pottarg(idim,i)-pottargex(idim,i))**2
-        err = err + abs(gradtarg(idim,1,i)-gradtargex(idim,1,i))**2
-        err = err + abs(gradtarg(idim,2,i)-gradtargex(idim,2,i))**2
-        err = err + abs(gradtarg(idim,3,i)-gradtargex(idim,3,i))**2
-      enddo
-    enddo
-  endif
-
-  err = sqrt(err/ra)
-  return
-end subroutine comperr_vec
 
