@@ -931,7 +931,7 @@ subroutine lfmm3dmain_mps(nd, eps, &
 
       if(ifprint .ge. 1) call prinf('=== STEP 1 (shift mp) ====*',i,0)
 
-  
+
   call cpu_time(time1)
   !$ time1=omp_get_wtime()
 
@@ -1508,7 +1508,7 @@ subroutine lfmm3dmain_mps(nd, eps, &
         timeinfo(4), ' ', timeinfo(4)/d*100, '%'
     write(6,'(a,f6.3,a,f6.2,a)') 'Step 5: eval lo(loc to center)',&
         timeinfo(5), ' ', timeinfo(5)/d*100, '%'
-    write(6,'(a,f6.3,a,f6.2,a)') 'Step 6: direct                ',&
+    write(6,'(a,f6.3,a,f6.2,a)') 'Step 6: direct    ',&
         timeinfo(6), ' ', timeinfo(6)/d*100, '%'
     write(6,'(a,f6.3)') 'Total time required         ', d
     print *

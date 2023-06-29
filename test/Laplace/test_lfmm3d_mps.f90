@@ -1,41 +1,54 @@
-program test_lfmm3d_mp2loc
-  implicit double precision (a-h,o-z)
+program test_lfmm3d_mps
+  implicit none
   
-  character(len=72) str1
   
   integer :: ns, nt, nc
-  integer :: i,j,k,ntest,nd,idim
+  integer :: i,j,k,ntest,nd,idim,ier,ijk,ilen,isuccess
   integer :: ifcharge,ifdipole,ifpgh,ifpghtarg
   integer :: ipass(18),len1,ntests,isum
   integer, allocatable :: nterms(:), impole(:)
   integer :: interms,lca
   integer, allocatable :: tmp_vec(:)
+
+  double precision :: dnorm, done, h, pi, rscale,sc, shift, thresh
+  integer :: iper, lused, lw, n1, nlege, npts, ns1, ntarg, ntm,ntot
+
   
-  double precision :: eps, err, hkrand, dnorms(1000), force(10)
+  double precision :: eps, err, hkrand, dnorms
   double precision, allocatable :: source(:,:), targ(:,:)
   double precision, allocatable :: centers(:,:)
   double precision, allocatable :: wlege(:), rscales(:)
-  
+  double precision, allocatable :: dc(:,:)
+
+
   double precision :: eye, zk, ima
   double precision, allocatable :: charge(:,:)
   double precision, allocatable :: dipvec(:,:,:)
   double precision, allocatable :: pot(:,:), pot2(:,:), pottarg(:,:)
   double precision, allocatable :: grad(:,:,:),gradtarg(:,:,:)
   double precision, allocatable :: hess(:,:,:),hesstarg(:,:,:)
-  double precision, allocatable :: mpole(:), local(:)
-   double complex, allocatable :: ilocal(:,:)
+  double complex, allocatable :: mpole(:), local(:)
+  double complex, allocatable :: ilocal(:,:)
+
 
   data eye/(0.0d0,1.0d0)/
   ima = (0,1)
   done = 1
   pi = 4*atan(done)
 
+
+  allocate(dc(0:50,0:50))
+  call getsqrtbinomialcoeffs(50,dc)
+  lca = 4*50
+
+
+
   !
   ! initialize printing routine
   !
   call prini(6,13)
 
-  nd = 3
+  nd = 1
 
 
   n1 = 3
@@ -62,13 +75,7 @@ program test_lfmm3d_mp2loc
   write(*,*) "Testing suite for lfmm3d_mps"
   write(*,'(a,e12.5)') "Requested precision = ",eps
 
-  boxsize = 1
-  dlam = 1/boxsize
-  zk = 2*pi/dlam + eye*0.02d0
 
-  call prin2('boxsize in wavelengths = *', boxsize, 1)
-  call prin2('dlam = *', dlam, 1)
-  call prin2('zk = *', zk, 2)
 
   !
   ! generate sources uniformly in the unit cube 
@@ -91,18 +98,15 @@ program test_lfmm3d_mp2loc
   
   dnorm = 0
   do i=1,ns
-    !source(1,i) = hkrand(0)**2
-    !source(2,i) = hkrand(0)**2
-    !source(3,i) = hkrand(0)**2
 
     do idim=1,nd
 
-      charge(idim,i) = hkrand(0) + eye*hkrand(0)
+      charge(idim,i) = hkrand(0) 
       dnorm = dnorm + abs(charge(idim,i))**2
       
-      dipvec(idim,1,i) = hkrand(0) + eye*hkrand(0)
-      dipvec(idim,2,i) = hkrand(0) + eye*hkrand(0)
-      dipvec(idim,3,i) = hkrand(0) + eye*hkrand(0)
+      dipvec(idim,1,i) = hkrand(0) 
+      dipvec(idim,2,i) = hkrand(0) 
+      dipvec(idim,3,i) = hkrand(0) 
 
       pot(idim,i) = 0
       grad(idim,1,i) = 0
@@ -135,10 +139,11 @@ program test_lfmm3d_mp2loc
   !
   allocate(nterms(nc), impole(nc))
 
-  ntm = 7
+  call l3dterms(eps, ntm)
+  !ntm = 7
   ntot = 0
   do i = 1,nc
-    nterms(i) = ntm + 2*cos(pi/2*i)
+    nterms(i) = ntm 
     ntot = ntot + (nterms(i)+1)*(2*nterms(i)+1)
   enddo
 
@@ -159,11 +164,11 @@ program test_lfmm3d_mp2loc
   call ylgndrfwini(nlege, wlege, lw, lused)
   call prinf('after ylgndrfwini, lused = *', lused, 1)
 
-  call zinitialize(nd*ntot, mpole)
+  call zinitialize(nd*ntot*2, mpole)
   
   ns1 = 1
   rscale = 1
-  sc = abs(zk)*shift
+  sc = shift
   if (sc .lt. 1) rscale = sc
   call prin2('rscale = *', rscale, 1)
   
@@ -187,7 +192,6 @@ program test_lfmm3d_mp2loc
   ifpgh = 1
   ntarg = 0
   ifpghtarg = 0
-  nd = 1
   ier = 0
   call lfmm3d(nd, eps, ns, source, ifcharge, &
       charge, ifdipole, dipvec, iper, ifpgh, pot, grad, hess, ntarg, &
@@ -219,7 +223,7 @@ program test_lfmm3d_mp2loc
   write(6,*) 
   write(6,*) 
 
-
+  
   call lfmm3d_mps(nd, eps,  &
       nc, centers, rscales, nterms, mpole, impole, local,ier)
 
@@ -234,30 +238,24 @@ program test_lfmm3d_mp2loc
   call zinitialize(nd*nc, pot2)
   npts = 1
   do i = 1,nc
-  !    call l3dtaevalp(nd, rscales(i), &
- !       centers(1,i), local(impole(i)), &
-!        nterms(i), source(1,i), npts, pot2(1,i), &
-!        wlege, nlege)
+      call l3dtaevalp(nd, rscales(i), &
+        centers(1,i), local(impole(i)), &
+        nterms(i), source(1,i), npts, pot2(1,i), &
+        wlege, nlege)
 
-   call l3dlocloc(nd, rscales(i),&
-        centers(1,i), local(impole(i)),&
-        nterms(i), rscales(i), centers(1,i),&
-        ilocal, 7,&
-        dc,lca)
+!   call l3dlocloc(nd, rscales(i),&
+ !       centers(1,i), local(impole(i)),&
+ !       nterms(i), rscales(i), centers(1,i),&
+ !       ilocal, 7, &
+ !       dc,lca)
 
-    call l3dtaevalp(nd, rscales(i),&
-         centers(1,i), ilocal,&
-         7, source(1,i), npts, pot2(1,i),&
-         wlege, nlege)
-
-
+ !   call l3dtaevalp(nd, rscales(i),&
+ !        centers(1,i), ilocal,&
+ !        7, source(1,i), npts, pot2(1,i),&
+ !        wlege, nlege)
+ !   tmp_vec = (/(k, k=impole(i),impole(i)+interms-1,1)/)
+ !   ilocal = reshape(local(tmp_vec),(/nterms(1)+1,2*nterms(1)+1/))
   enddo
-  
-
-         tmp_vec = (/(k, k=impole(i),impole(i)+interms-1,1)/)
-         ilocal = reshape(local(tmp_vec),(/nterms(1)+1,2*nterms(1)+1/))
-
-
 
   call prin2('from lfmm3d_mps, potential = *', pot2, 10)
 
@@ -273,10 +271,6 @@ program test_lfmm3d_mp2loc
       pot2(i,j) = pot2(i,j) - pot(i,j)
     enddo
   enddo
-
-  !call prin2('diff = *', pot2, 2*nd*ns)
-  !call prin2('err = *', err, 1)
-  !call prin2('dnorm = *', dnorm, 1)
   
   err = sqrt(err/dnorm)
   call prin2('l2 rel err=*',err,1)
