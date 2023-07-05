@@ -931,7 +931,7 @@ subroutine lfmm3dmain_mps(nd, eps, &
 
       if(ifprint .ge. 1) call prinf('=== STEP 1 (shift mp) ====*',i,0)
 
-
+  
   call cpu_time(time1)
   !$ time1=omp_get_wtime()
 

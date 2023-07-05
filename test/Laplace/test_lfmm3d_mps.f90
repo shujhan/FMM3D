@@ -10,7 +10,7 @@ program test_lfmm3d_mps
   integer :: interms,lca
   integer, allocatable :: tmp_vec(:)
 
-  double precision :: dnorm, done, h, pi, rscale,sc, shift, thresh
+  double precision :: dnorm, done, h, pi, rscale,sc, shift, thresh,dnormGrad,errGrad
   integer :: iper, lused, lw, n1, nlege, npts, ns1, ntarg, ntm,ntot
 
   
@@ -25,7 +25,7 @@ program test_lfmm3d_mps
   double precision, allocatable :: charge(:,:)
   double precision, allocatable :: dipvec(:,:,:)
   double precision, allocatable :: pot(:,:), pot2(:,:), pottarg(:,:)
-  double precision, allocatable :: grad(:,:,:),gradtarg(:,:,:)
+  double precision, allocatable :: grad(:,:,:),grad2(:,:,:),gradtarg(:,:,:)
   double precision, allocatable :: hess(:,:,:),hesstarg(:,:,:)
   double complex, allocatable :: mpole(:), local(:)
   double complex, allocatable :: ilocal(:,:)
@@ -63,7 +63,7 @@ program test_lfmm3d_mps
   allocate(source(3,ns),targ(3,nt), centers(3,nc))
   allocate(charge(nd,ns),dipvec(nd,3,ns))
   allocate(pot(nd,ns), pot2(nd,ns))
-  allocate(grad(nd,3,ns))
+  allocate(grad(nd,3,ns),grad2(nd,3,ns))
   allocate(hess(nd,6,ns))
 
   allocate(pottarg(nd,nt))
@@ -189,7 +189,7 @@ program test_lfmm3d_mps
   thresh = 1.0d-15
   ifcharge = 1
   ifdipole = 0
-  ifpgh = 1
+  ifpgh = 2
   ntarg = 0
   ifpghtarg = 0
   ier = 0
@@ -201,6 +201,8 @@ program test_lfmm3d_mps
  ! call lfmm3d_s_c_p(eps,ns,source,charge,pot,ier)
   
   call prin2('via fmm, potential = *', pot, 10)
+
+  call prin2('via fmm, grad = *', grad, 10)
 
 
 
@@ -238,12 +240,20 @@ program test_lfmm3d_mps
   call zinitialize(nd*nc, pot2)
   npts = 1
   do i = 1,nc
-      call l3dtaevalp(nd, rscales(i), &
-        centers(1,i), local(impole(i)), &
-        nterms(i), source(1,i), npts, pot2(1,i), &
+!      call l3dtaevalp(nd, rscales(i), &
+!       centers(1,i), local(impole(i)), &
+!        nterms(i), source(1,i), npts, pot2(1,i), &
+!        wlege, nlege)
+
+
+      call l3dtaevalg(nd, rscales(i), &
+       centers(1,i), local(impole(i)), &
+        nterms(i), source(1,i), npts, pot2(1,i),grad2(1,1,i), &
         wlege, nlege)
 
-!   call l3dlocloc(nd, rscales(i),&
+
+
+ !   call l3dlocloc(nd, rscales(i),&
  !       centers(1,i), local(impole(i)),&
  !       nterms(i), rscales(i), centers(1,i),&
  !       ilocal, 7, &
@@ -258,6 +268,7 @@ program test_lfmm3d_mps
   enddo
 
   call prin2('from lfmm3d_mps, potential = *', pot2, 10)
+  call prin2('from lfmm3d_mps, grad = *', grad2, 10)
 
 
 
@@ -274,6 +285,26 @@ program test_lfmm3d_mps
   
   err = sqrt(err/dnorm)
   call prin2('l2 rel err=*',err,1)
+
+
+ errGrad = 0
+ dnormGrad = 0
+   do j = 1,nc
+    do i = 1,nd
+      do k = 1,3
+      errGrad = errGrad + abs(grad(i,k,j)-grad2(i,k,j))**2
+      dnormGrad = dnormGrad + abs(grad(i,k,j))**2
+      enddo
+    enddo
+  enddo
+  
+  errGrad = sqrt(errGrad/dnormGrad)
+  call prin2('Grad l2 rel err=*',errGrad,1)
+
+
+
+
+
 
   open(unit=33,file='print_testres.txt',access='append')
   isuccess = 0
