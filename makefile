@@ -111,11 +111,11 @@ LAP = src/Laplace
 LOBJS = $(LAP)/lwtsexp_sep1.o $(LAP)/l3dterms.o $(LAP)/l3dtrans.o \
 	$(LAP)/laprouts3d.o $(LAP)/lfmm3d.o $(LAP)/lfmm3dwrap.o \
 	$(LAP)/lfmm3dwrap_legacy.o $(LAP)/lfmm3dwrap_vec.o $(LAP)/lwtsexp_sep2.o \
-	$(LAP)/lpwrouts.o $(LAP)/lfmm3d_ndiv.o
+	$(LAP)/lpwrouts.o $(LAP)/lfmm3d_ndiv.o $(LAP)/lfmm3d_mps.o
 
 # Stokes objects
 STOK = src/Stokes
-STOBJS = $(STOK)/stfmm3d.o $(STOK)/stokkernels.o
+STOBJS = $(STOK)/stfmm3d.o $(STOK)/stokkernels.o $(STOK)/stfmm3d_mps.o
 
 # Maxwell objects
 EM = src/Maxwell
@@ -332,6 +332,9 @@ test/lfmm3d_vec:
 test/stfmm3d:
 	$(FC) $(FFLAGS) test/Stokes/test_stfmm3d.f $(TOBJS) $(COMOBJS) $(LOBJS) $(STOBJS) -o test/Stokes/int2-test-stfmm3d $(LIBS)
 
+test/stfmm3d_mps: $(STATICLIB) $(TOBJS) 
+	$(FC) $(FFLAGS) test/Stokes/test_stfmm3d_mps.f $(TOBJS) $(COMOBJS) $(LOBJS) $(STOBJS) $(HOBJS) -o test/Stokes/int2-test-stfmm3d-mps $(LIBS)
+
 test/stokkernels:
 	$(FC) $(FFLAGS) test/Stokes/test_stokkernels.f $(TOBJS) $(COMOBJS) $(LOBJS) $(STOBJS) -o test/Stokes/int2-test-stokkernels $(LIBS)
 
@@ -345,8 +348,8 @@ test_hfmm3d_mps: $(STATICLIB) $(TOBJS)
 
 test_lfmm3d_mps: $(STATICLIB) $(TOBJS)
 	$(FC) $(FFLAGS) test/Laplace/test_lfmm3d_mps.f90 \
-  $(TOBJS) $(COMOBJS) $(LOBJS) $(LIBS) $(HOBJS)\
-  -o test/Laplace/int2-test-lfmm3d-mps
+  $(TOBJS) $(COMOBJS) $(LOBJS) $(LIBS) $(HOBJS)\  
+	-o test/Laplace/int2-test-lfmm3d-mps
 
 test_2: $(STATICLIB) $(TOBJS)
 	$(FC) $(FFLAGS) test/Laplace/test_2.f90 \
