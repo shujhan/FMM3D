@@ -177,13 +177,45 @@ c     local
       double complex, allocatable :: local3(:), local4(:)
       integer, allocatable :: nterms(:), impole(:)
 
+
       double complex, allocatable :: local(:,:), mpole(:,:)
 
 
-      nc = nsource
+      double complex, allocatable :: potl1(:,:)
 
+
+
+
+      double complex, allocatable :: test(:,:,:)
+      integer :: init
+      init = 1
+      allocate(test(4,1,3))
+
+      do i = 1,4
+        do j = 1,1
+          do ii = 1,3
+            test(i,j,ii) = init
+            init = init + 1
+          enddo
+        enddo
+      enddo
+
+
+
+
+
+
+
+
+
+
+
+      nc = nsource
       allocate(centers(3,nc))
 
+
+
+      allocate(potl1(nd,nsource))
 
 
 
@@ -307,7 +339,7 @@ c$OMP END PARALLEL DO
 
 
 
-      h = 1.0d0/14
+      h = 1.0d0/5
       shift = h/1000
       call prin2('shift = *', shift, 1)
 
@@ -346,7 +378,7 @@ c      ntm = 10
       call prinf('ilen = *', ilen, 1)
       call prin2('impole = *', impole, 10)
   
-      nlege = 400
+      nlege = 300
       lw = 5*(nlege+1)**2
       allocate( wlege(lw) )
 
@@ -384,10 +416,13 @@ c      ntm = 10
 
 
 
+
+
+
 c   First ndl
       do i = 1,nc
          rscales(i) = rscale
-      call l3dformmpc(nd,rscale, source(1,i), charge(1,1,i),
+      call l3dformmpc(nd,rscale, source(1,i), charge(1,nd,i),
      1     ns1, centers(1,i), nterms(i), mpole1(impole(i)),
      2     wlege, nlege)
       enddo
@@ -401,27 +436,31 @@ c   First ndl
       call lfmm3d_mps(nd, eps, nc, centers, rscales, nterms,
      1     mpole1, impole, local1, ier)
 
-
-
-      call prin2('local1 = *', local1, 10)
+ 
 
 
       call zinitialize(nd*nc*ndper, potl)
       call zinitialize(nd*nc*ndper*3, gradl)
 
 
+      call zinitialize(nd*nc, potl1)
+
+
+
+c      do i = 1,nc
+c      call l3dtaevalg(nd, rscales(i),
+c     1     centers(1,i), local1(impole(i)), 
+c     2     nterms(i), source(1,i), npts, potl(1,1,i),gradl(1,1,1,i), 
+c     3     wlege, nlege)
+c      enddo
+
+
       do i = 1,nc
-      call l3dtaevalg(nd, rscales(i),
-     1     centers(1,i), local1(impole(i)), 
-     2     nterms(i), source(1,i), npts, potl(1,1,i),gradl(1,1,1,i), 
+      call l3dtaevalp(nd, rscales(i),
+     1     centers(1,i), local1(impole(i)),
+     2     nterms(i), source(1,i), npts, potl1(1,i),
      3     wlege, nlege)
       enddo
-
-c      call l3dtaevalp(nd, rscales(i),
-c     1     centers(1,i), local1(impole(i)),
-c     2     nterms(i), source(1,i), npts, potl(1,1,i),
-c     3     wlege, nlege)
-
 
 
 
@@ -432,7 +471,7 @@ c     3     wlege, nlege)
 c   Second ndl
       do i = 1,nc
          rscales(i) = rscale
-      call l3dformmpc(nd,rscale, source(1,i), charge(2,1,i),
+      call l3dformmpc(ndl,rscale, source(1,i), charge(2,1,i),
      1     ns1, centers(1,i), nterms(i), mpole2(impole(i)),
      2     wlege, nlege)
       enddo
@@ -445,7 +484,7 @@ c   Second ndl
 
 
       do i = 1,nc
-      call l3dtaevalg(nd, rscales(i),
+      call l3dtaevalg(ndl, rscales(i),
      1     centers(1,i), local2(impole(i)), 
      2     nterms(i), source(1,i), npts, potl(2,1,i),gradl(2,1,1,i), 
      3     wlege, nlege)
@@ -459,7 +498,7 @@ c   Second ndl
 c   third ndl
       do i = 1,nc
          rscales(i) = rscale
-      call l3dformmpc(nd,rscale, source(1,i), charge(3,1,i),
+      call l3dformmpc(ndl,rscale, source(1,i), charge(3,1,i),
      1     ns1, centers(1,i), nterms(i), mpole3(impole(i)),
      2     wlege, nlege)
       enddo
@@ -471,7 +510,7 @@ c   third ndl
       call prin2('local3 = *', local3, 10)
 
       do i = 1,nc
-      call l3dtaevalg(nd, rscales(i),
+      call l3dtaevalg(ndl, rscales(i),
      1     centers(1,i), local3(impole(i)), 
      2     nterms(i), source(1,i), npts, potl(3,1,i),gradl(3,1,1,i), 
      3     wlege, nlege)
@@ -487,7 +526,7 @@ c   third ndl
 c   fourth ndl
       do i = 1,nc
          rscales(i) = rscale
-      call l3dformmpc(nd,rscale, source(1,i), charge(4,1,i),
+      call l3dformmpc(ndl,rscale, source(1,i), charge(4,1,i),
      1     ns1, centers(1,i), nterms(i), mpole4(impole(i)),
      2     wlege, nlege)
       enddo
@@ -498,7 +537,7 @@ c   fourth ndl
       call prin2('local4 = *', local4, 10)
 
       do i = 1,nc
-      call l3dtaevalg(nd, rscales(i),
+      call l3dtaevalg(ndl, rscales(i),
      1     centers(1,i), local4(impole(i)), 
      2     nterms(i), source(1,i), npts, potl(4,1,i),gradl(4,1,1,i), 
      3     wlege, nlege)
@@ -516,7 +555,7 @@ c     Try to put together
       do j = 1, ndper
         do i = 1,nc
          rscales(i) = rscale
-      call l3dformmpc(nd,rscale, source(1,i), charge(j,1,i),
+      call l3dformmpc(ndl,rscale, source(1,i), charge(j,1,i),
      1     ns1, centers(1,i), nterms(i), mpole(j,impole(i)),
      2     wlege, nlege)
         enddo
@@ -527,7 +566,7 @@ c     Try to put together
 
       do j = 1, ndper
         do i = 1,nc
-      call l3dtaevalg(nd, rscales(i),
+      call l3dtaevalg(ndl, rscales(i),
      1     centers(1,i), local(j,impole(i)), 
      2     nterms(i), source(1,i), npts, potl(j,1,i),gradl(j,1,1,i), 
      3     wlege, nlege)
@@ -539,15 +578,21 @@ c     Try to put together
 
 
 
-c  Use lfmm3d it is correct 
 
       call lfmm3d(ndl,eps,nsource,source,ifchargel,charge,
      1     ifdipolel,dipvec,iper,ifpghl,potl,gradl,hessl,ntarg,
      2     targ,ifpghtargl,pottargl,gradtargl,hesstargl,ier)
 
 
-      call prin2('via fmm, potential = *', potl, 10)
-      call prin2('via fmm, grad = *', gradl, 10)
+      call prin2('via fmm, potl = *', potl, 10)
+      call prin2('via fmm, gradl = *', gradl, 10)
+
+
+
+
+
+
+
 
 
 
