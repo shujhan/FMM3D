@@ -152,7 +152,7 @@ c     local
      1     hessl(:,:,:,:), pottargl(:,:,:), gradtargl(:,:,:,:),
      2     hesstargl(:,:,:,:)
       double precision :: pt(3), gl(3), hl(6), vel(3), velgrad(3,3)
-      double precision :: press, pl, pv, dmu(3), dnu(3), sigma(3)
+      double precision :: press, pl, pv, dmu(3), dnu(3), sigma(3),pl4
 
       integer ndl, ifchargel, ifdipolel, ifpghl, ifpghtargl
       integer ndper
@@ -181,26 +181,13 @@ c     local
       double complex, allocatable :: local(:,:), mpole(:,:)
 
 
-      double complex, allocatable :: potl1(:,:)
+
+      double precision, allocatable :: charge1(:,:),charge2(:,:)
+      double precision, allocatable :: charge3(:,:),charge4(:,:)
 
 
-
-
-      double complex, allocatable :: test(:,:,:)
-      integer :: init
-      init = 1
-      allocate(test(4,1,3))
-
-      do i = 1,4
-        do j = 1,1
-          do ii = 1,3
-            test(i,j,ii) = init
-            init = init + 1
-          enddo
-        enddo
-      enddo
-
-
+      double precision, allocatable :: potl1(:,:),potl2(:,:)
+      double precision, allocatable :: potl3(:,:),potl4(:,:)
 
 
 
@@ -216,7 +203,9 @@ c     local
 
 
       allocate(potl1(nd,nsource))
-
+      allocate(potl2(nd,nsource))
+      allocate(potl3(nd,nsource))
+      allocate(potl4(nd,nsource))
 
 
 
@@ -247,6 +236,14 @@ c     allocate necessary arrays
      2     gradl(ndper,nd,3,nsource),gradtargl(ndper,nd,3,ntarg),
      3     hessl(ndper,nd,6,nsource),hesstargl(ndper,nd,6,ntarg),
      4     stat=ier)
+
+
+      allocate(charge1(nd,nsource),charge2(nd,nsource),
+     1     charge3(nd,nsource),charge4(nd,nsource))
+
+
+
+
       if(ier .ne. 0) then
          print *, "In stfmm3d: cannot allocate Laplace call storage"
          print *, "ndper =",ndper
@@ -256,18 +253,24 @@ c     allocate necessary arrays
          stop
       endif
 
+      nc = nsource
+
 c     set-up appropriate vector charge and dipole arrays
 
 c$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(i,j,l,sigma,dmu,dnu)
-c$OMP$ PRIVATE(pl,pv)      
+c$OMP$ PRIVATE(pl,pv,pl4)      
       do i = 1,nsource
 
          do j = 1,nd
+
+           charge1(j,i) = 0
+           charge2(j,i) = 0
+           charge3(j,i) = 0
+           charge4(j,i) = 0
+
+
             do l = 1,ndper
                charge(l,j,i) = 0
-               dipvec(l,j,1,i) = 0
-               dipvec(l,j,2,i) = 0
-               dipvec(l,j,3,i) = 0
             enddo
          enddo
 
@@ -277,27 +280,25 @@ c$OMP$ PRIVATE(pl,pv)
                sigma(2) = stoklet(j,2,i)
                sigma(3) = stoklet(j,3,i)
             endif
-            if (ifstrslet .ge. 1) then
-               dmu(1) = strslet(j,1,i)
-               dmu(2) = strslet(j,2,i)
-               dmu(3) = strslet(j,3,i)
-               dnu(1) = strsvec(j,1,i)
-               dnu(2) = strsvec(j,2,i)
-               dnu(3) = strsvec(j,3,i)
+
+
+            if (ifstoklet .eq. 1) then
+                charge1(j,i) = charge1(j,i) + sigma(1)/2
+                charge2(j,i) = charge2(j,i) + sigma(2)/2
+                charge3(j,i) = charge3(j,i) + sigma(3)/2
             endif
 
+            if (ifstoklet .eq. 1) then
+               pl4 = sigma(1)*source(1,i) + sigma(2)*source(2,i) +
+     1              sigma(3)*source(3,i)
+               charge4(j,i) = charge4(j,i) + pl4/2
+            endif
+
+
+
             do l = 1,3
-               
                if (ifstoklet .eq. 1) then
                   charge(l,j,i) = charge(l,j,i) + sigma(l)/2
-               endif
-               if (ifstrslet .eq. 1) then
-                  dipvec(l,j,1,i) = dipvec(l,j,1,i) - (dmu(l)*dnu(1) + 
-     1                 dmu(1)*dnu(l))/2
-                  dipvec(l,j,2,i) = dipvec(l,j,2,i) - (dmu(l)*dnu(2) + 
-     1                 dmu(2)*dnu(l))/2
-                  dipvec(l,j,3,i) = dipvec(l,j,3,i) - (dmu(l)*dnu(3) + 
-     1                 dmu(3)*dnu(l))/2
                endif
             enddo
             
@@ -308,20 +309,6 @@ c$OMP$ PRIVATE(pl,pv)
      1              sigma(3)*source(3,i)
                charge(l,j,i) = charge(l,j,i) + pl/2
             endif
-            if (ifstrslet .eq. 1) then
-               pl = dmu(1)*source(1,i) + dmu(2)*source(2,i) +
-     1              dmu(3)*source(3,i)
-               pv = dnu(1)*source(1,i) + dnu(2)*source(2,i) +
-     1              dnu(3)*source(3,i)
-               
-               dipvec(l,j,1,i) = dipvec(l,j,1,i) -
-     1              (dmu(1)*pv + dnu(1)*pl)/2
-               dipvec(l,j,2,i) = dipvec(l,j,2,i) -
-     1              (dmu(2)*pv + dnu(2)*pl)/2
-               dipvec(l,j,3,i) = dipvec(l,j,3,i) -
-     1              (dmu(3)*pv + dnu(3)*pl)/2
-            endif
-            
          enddo
          
       enddo
@@ -334,13 +321,8 @@ c$OMP END PARALLEL DO
 
 
 
-
-
-
-
-
       h = 1.0d0/5
-      shift = h/1000
+      shift = 1.0d-6
       call prin2('shift = *', shift, 1)
 
       do i = 1,nsource
@@ -408,6 +390,7 @@ c      ntm = 10
       allocate(local2(nd*ntot))
       allocate(local3(nd*ntot))
       allocate(local4(nd*ntot))
+      local1 = 0
 
       npts = 1
       iper = 0
@@ -422,21 +405,16 @@ c      ntm = 10
 c   First ndl
       do i = 1,nc
          rscales(i) = rscale
-      call l3dformmpc(nd,rscale, source(1,i), charge(1,nd,i),
+      call l3dformmpc(nd,rscale, source(1,i), charge1(1,i),
      1     ns1, centers(1,i), nterms(i), mpole1(impole(i)),
      2     wlege, nlege)
       enddo
 
 
-      call prin2('source = *', source, 10)
-      call prin2('charge = *', charge, 10)
-      call prin2('centers = *', centers, 10)
-
-
       call lfmm3d_mps(nd, eps, nc, centers, rscales, nterms,
      1     mpole1, impole, local1, ier)
 
- 
+
 
 
       call zinitialize(nd*nc*ndper, potl)
@@ -444,13 +422,16 @@ c   First ndl
 
 
       call zinitialize(nd*nc, potl1)
-
+      call zinitialize(nd*nc, potl2)
+      call zinitialize(nd*nc, potl3)
+      call zinitialize(nd*nc, potl4)
+      npts = 1
 
 
 c      do i = 1,nc
 c      call l3dtaevalg(nd, rscales(i),
 c     1     centers(1,i), local1(impole(i)), 
-c     2     nterms(i), source(1,i), npts, potl(1,1,i),gradl(1,1,1,i), 
+c     2     nterms(i), source(1,i), npts, potl1(1,i),gradl(1,1,1,i), 
 c     3     wlege, nlege)
 c      enddo
 
@@ -463,15 +444,17 @@ c      enddo
       enddo
 
 
-
-      call prin2('via mps, potl = *', potl, 10)
+      call prin2('via mps, potl1 = *', potl1, 10)
       call prin2('via mps, gradl = *', gradl, 10)
+
+
+
 
 
 c   Second ndl
       do i = 1,nc
          rscales(i) = rscale
-      call l3dformmpc(ndl,rscale, source(1,i), charge(2,1,i),
+      call l3dformmpc(nd,rscale, source(1,i), charge2(1,i),
      1     ns1, centers(1,i), nterms(i), mpole2(impole(i)),
      2     wlege, nlege)
       enddo
@@ -484,13 +467,14 @@ c   Second ndl
 
 
       do i = 1,nc
-      call l3dtaevalg(ndl, rscales(i),
+      call l3dtaevalg(nd, rscales(i),
      1     centers(1,i), local2(impole(i)), 
-     2     nterms(i), source(1,i), npts, potl(2,1,i),gradl(2,1,1,i), 
+     2     nterms(i), source(1,i), npts, potl2(1,i),gradl(2,1,1,i), 
      3     wlege, nlege)
       enddo
-      call prin2('via mps, potl = *', potl, 10)
+      call prin2('via mps, potl = *', potl2, 10)
       call prin2('via mps, gradl = *', gradl, 10)
+
 
 
 
@@ -498,7 +482,7 @@ c   Second ndl
 c   third ndl
       do i = 1,nc
          rscales(i) = rscale
-      call l3dformmpc(ndl,rscale, source(1,i), charge(3,1,i),
+      call l3dformmpc(nd,rscale, source(1,i), charge3(1,i),
      1     ns1, centers(1,i), nterms(i), mpole3(impole(i)),
      2     wlege, nlege)
       enddo
@@ -510,14 +494,13 @@ c   third ndl
       call prin2('local3 = *', local3, 10)
 
       do i = 1,nc
-      call l3dtaevalg(ndl, rscales(i),
+      call l3dtaevalg(nd, rscales(i),
      1     centers(1,i), local3(impole(i)), 
-     2     nterms(i), source(1,i), npts, potl(3,1,i),gradl(3,1,1,i), 
+     2     nterms(i), source(1,i), npts, potl3(1,i),gradl(3,1,1,i), 
      3     wlege, nlege)
       enddo
-      call prin2('via mps, potl = *', potl, 10)
+      call prin2('via mps, potl = *', potl3, 10)
       call prin2('via mps, gradl = *', gradl, 10)
-
 
 
 
@@ -526,7 +509,7 @@ c   third ndl
 c   fourth ndl
       do i = 1,nc
          rscales(i) = rscale
-      call l3dformmpc(ndl,rscale, source(1,i), charge(4,1,i),
+      call l3dformmpc(nd,rscale, source(1,i), charge4(1,i),
      1     ns1, centers(1,i), nterms(i), mpole4(impole(i)),
      2     wlege, nlege)
       enddo
@@ -539,10 +522,10 @@ c   fourth ndl
       do i = 1,nc
       call l3dtaevalg(ndl, rscales(i),
      1     centers(1,i), local4(impole(i)), 
-     2     nterms(i), source(1,i), npts, potl(4,1,i),gradl(4,1,1,i), 
+     2     nterms(i), source(1,i), npts, potl4(1,i),gradl(4,1,1,i), 
      3     wlege, nlege)
       enddo
-      call prin2('via mps, potl = *', potl, 10)
+      call prin2('via mps, potl = *', potl4, 10)
       call prin2('via mps, gradl = *', gradl, 10)
 
 
@@ -550,30 +533,12 @@ c   fourth ndl
 
 
 
-c     Try to put together 
 
-      do j = 1, ndper
-        do i = 1,nc
-         rscales(i) = rscale
-      call l3dformmpc(ndl,rscale, source(1,i), charge(j,1,i),
-     1     ns1, centers(1,i), nterms(i), mpole(j,impole(i)),
-     2     wlege, nlege)
-        enddo
-      enddo
 
-      call lfmm3d_mps(ndl,eps,nc,centers,rscales,nterms,
-     1     mpole,impole,local,ier)
 
-      do j = 1, ndper
-        do i = 1,nc
-      call l3dtaevalg(ndl, rscales(i),
-     1     centers(1,i), local(j,impole(i)), 
-     2     nterms(i), source(1,i), npts, potl(j,1,i),gradl(j,1,1,i), 
-     3     wlege, nlege)
-        enddo
-      enddo
-      call prin2('via mps, potl = *', potl, 10)
-      call prin2('via mps, gradl = *', gradl, 10)
+
+
+
 
 
 
