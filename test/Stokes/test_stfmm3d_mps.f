@@ -449,9 +449,18 @@ c      enddo
 
 
 
+c      open(4, file = 'potl4.txt')  
+c      do i=1,100  
+c         write(4,*) potl4(1,i)
+c      end do 
+c      close(4) 
 
 
-
+      open(4, file = 'gradl.txt')  
+      do i=1,100  
+         write(4,*) gradl1(1,1,i),gradl1(1,2,i),gradl2(1,1,i)
+      end do 
+      close(4) 
 
 
 
@@ -629,21 +638,42 @@ c     confirm hessian ordering convention...
 
 
 c     l = 4
+
+            if (i .gt. ntarg) then
+               ifppreg1 = ifppreg
+               ii = i-ntarg
+               pt(1) = source(1,ii)
+               pt(2) = source(2,ii)
+               pt(3) = source(3,ii)
+               pl = potl4(j,ii)
+               gl(1) = gradl4(j,1,ii)
+               gl(2) = gradl4(j,2,ii)
+               gl(3) = gradl4(j,3,ii)
+               hl(1) = hessl4(j,1,ii)
+               hl(2) = hessl4(j,2,ii)
+               hl(3) = hessl4(j,3,ii)
+               hl(4) = hessl4(j,4,ii)
+               hl(5) = hessl4(j,5,ii)
+               hl(6) = hessl4(j,6,ii)                       
+            endif
+
+
+
                vel(1) = vel(1) + gl(1)
                vel(2) = vel(2) + gl(2)
                vel(3) = vel(3) + gl(3)                  
                if (ifppreg1 .eq. 3) then
 c     confirm hessian ordering convention...
-               velgrad(1,1) = velgrad(1,1) + hl(1)
-               velgrad(2,1) = velgrad(2,1) + hl(4)
-               velgrad(3,1) = velgrad(3,1) + hl(5)
-               velgrad(1,2) = velgrad(1,2) + hl(4)
-               velgrad(2,2) = velgrad(2,2) + hl(2)
-               velgrad(3,2) = velgrad(3,2) + hl(6)
-               velgrad(1,3) = velgrad(1,3) + hl(5)
-               velgrad(2,3) = velgrad(2,3) + hl(6)
-               velgrad(3,3) = velgrad(3,3) + hl(3)
-            endif
+                  velgrad(1,1) = velgrad(1,1) + hl(1)
+                  velgrad(2,1) = velgrad(2,1) + hl(4)
+                  velgrad(3,1) = velgrad(3,1) + hl(5)
+                  velgrad(1,2) = velgrad(1,2) + hl(4)
+                  velgrad(2,2) = velgrad(2,2) + hl(2)
+                  velgrad(3,2) = velgrad(3,2) + hl(6)
+                  velgrad(1,3) = velgrad(1,3) + hl(5)
+                  velgrad(2,3) = velgrad(2,3) + hl(6)
+                  velgrad(3,3) = velgrad(3,3) + hl(3)
+               endif
 
 
 
@@ -673,6 +703,21 @@ c    end part
          enddo
       enddo
 c$OMP END PARALLEL DO
+
+
+
+      open(2, file = 'potMPS.txt')  
+      do i=1,100  
+         write(2,*) pot(1,i),pot(2,i),pot(3,i)
+      enddo 
+      close(2) 
+
+
+
+
+
+
+
 
 
 
@@ -730,15 +775,6 @@ c  test error for pot and grad we get
 
       call prin2('rel err pot srcs *',relerr,1)
       call prin2('rel err grad srcs *',relerrg,1)
-
-
-
-
-
-
-
-
-
 
 
 
