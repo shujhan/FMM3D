@@ -103,7 +103,7 @@
       nd = 1
 
 
-      ns = 100
+      ns = 12*12*12
       nt = 0
       nc = ns
       done = 1
@@ -210,8 +210,8 @@ c     set-up appropriate vector charge and dipole arrays
 
 
 
-      h = 1.0d0/5
-      shift = h/100
+      h = 1.0d0/14
+      shift = h/10000
       call prin2('shift = *', shift, 1)
       do i = 1,ns
         centers(1,i) = source(1,i) + shift
