@@ -13,354 +13,167 @@ cf2py  intent(out) pot,pre,grad
 cf2py  intent(out) pottarg,pretarg,gradtarg
 cf2py  intent(out) ier
 c
-c     Stokes FMM in R^{3}: evaluate all pairwise particle
-c     interactions (ignoring self-interactions) and
-c     interactions with targs.
-c      
-c     This routine computes sums of the form
-c
-c       u(x) = sum_m G_{ij}(x,y^{(m)}) sigma^{(m)}_j
-c                + sum_m T_{ijk}(x,y^{(m)}) mu^{(m)}_j nu^{(m)}_k
-c
-c     where sigma^{(m)} is the Stokeslet charge, mu^{(m)} is the
-c     stresslet charge, and nu^{(m)} is the stresslet orientation
-c     (note that each of these is a 3 vector per source point y^{(m)}).
-c     For x a source point, the self-interaction in the sum is omitted. 
-c
-c     Optionally, the associated pressure p(x) and gradient grad u(x)
-c     are returned
-c
-c       p(x) = sum_m P_j(x,y^m) sigma^{(m)}_j
-c          + sum_m T_{ijk}(x,y^{(m)}) PI_{jk} mu^{(m)}_j nu^{(m)}_k
-c
-c       grad u(x) = grad[sum_m G_{ij}(x,y^m) sigma^{(m)}_j
-c                + sum_m T_{ijk}(x,y^{(m)}) mu^{(m)}_j nu^{(m)}_k]
-c
-c-----------------------------------------------------------------------
-c     INPUT PARAMETERS:
-c     
-c   nd:    in: integer
-c              number of densities
-c   
-c   eps:   in: double precision
-c              requested precision
-c
-c   nsource in: integer  
-c               number of sources
-c
-c   source  in: double precision (3,nsource)
-c               source(k,j) is the kth component of the jth
-c               source locations
-c
-c   ifstoklet  in: integer  
-c               Stokeslet charge computation flag
-c               ifstoklet = 1   =>  include Stokeslet contribution
-c                                   otherwise do not
-c 
-c   stoklet in: double precision (nd,3,nsource) 
-c               Stokeslet charge strengths (sigma vectors above)
-c
-c   ifstrslet in: integer
-c               stresslet computation flag
-c               ifstrslet = 1   =>  include standard stresslet
-c                                   (type I)
-c
-c            NOT YET IMPLEMENTED
-c      
-c               ifstrslet = 2   =>  include symmetric stresslet
-c                                   (type II)
-c               ifstrslet = 3   =>  include rotlet
-c               ifstrslet = 4   =>  include Stokes doublet
-c                      otherwise do not include
-c
-c   strslet  in: double precision (nd,3,nsource) 
-c               stresslet strengths (mu vectors above)
-c
-c   strsvec  in: double precision (nd,3,nsource)   
-c               stresslet orientations (nu vectors above)
-c
-c     ifppreg    in: integer      
-c               flag for evaluating potential, gradient, and pressure
-c               at the sources
-c               ifppreg = 1, only potential
-c               ifppreg = 2, potential and pressure
-c         GRADIENT NOT IMPLEMENTED
-c               ifppreg = 3, potential, pressure, and gradient 
-c      
-c   ntarg   in: integer  
-c              number of targs 
-c
-c   targ    in: double precision (3,ntarg)
-c             targ(k,j) is the kth component of the jth
-c             targ location
-c      
-c   ifppregtarg in: integer
-c                flag for evaluating potential, gradient, and pressure
-c                at the targets
-c                ifppregtarg = 1, only potential
-c                ifppregtarg = 2, potential and pressure
-c                ifppregtarg = 3, potential, pressure, and gradient
-c
-c-----------------------------------------------------------------------
-c
-c   OUTPUT parameters:
-c
-c   pot   out: double precision(nd,3,nsource) 
-c           velocity at the source locations
-c      
-c   pre   out: double precision(nd,nsource)
-c           pressure at the source locations
-c      
-c         GRADIENT NOT IMPLEMENTED
-c   grad   out: double precision(nd,3,3,nsource) 
-c              gradient of velocity at the source locations
-c              grad(l,i,j,k) is the ith component of the
-c              gradient of the jth component of the velocity
-c              for the lth density at the kth source location
-c     
-c   pottarg   out: double precision(nd,3,ntarg) 
-c               velocity at the targets
-c      
-c   pretarg   out: double precision(nd,ntarg)
-c               pressure at the targets
-c      
-c   gradtarg   out: double precision(nd,3,3,ntarg) 
-c               gradient of velocity at the targets
-c               gradtarg(l,i,j,k) is the ith component of the
-c               gradient of the jth component of the velocity
-c               for the lth density at the kth target
-c     ier     out: integer
-c               error flag
-c
-c     TODO: implement other stresslet options and gradient
-c------------------------------------------------------------------
       implicit none
-      integer nd, ifstoklet, ifstrslet, ntarg
-      double precision eps
-      integer nsource, ifppreg, ifppregtarg
-      double precision source(3, nsource), targ(3, ntarg)
-      double precision stoklet(nd, 3, nsource), strslet(nd, 3, nsource)
-      double precision strsvec(nd, 3, nsource)
-      double precision pot(nd, 3, nsource), pre(nd,nsource)
-      double precision grad(nd, 3, 3, nsource)
-      double precision pottarg(nd, 3, ntarg), pretarg(nd,ntarg),
-     1     gradtarg(nd, 3, 3, ntarg) 
+      integer :: nd, ifstoklet, ifstrslet, nsource, ntarg
+      integer :: i,j,k,ii,l
+      integer :: ns,nc,ntm,ntot,ilen,nlege,lw,lused,ns1
+      integer :: npts, npt, ifppreg1, ifppreg,ifppregtarg
+      integer :: ier, iper
 
-c     local
-      double precision, allocatable :: charge(:,:,:), dipvec(:,:,:,:)
-      double precision, allocatable :: potl(:,:,:), gradl(:,:,:,:),
-     1     hessl(:,:,:,:), pottargl(:,:,:), gradtargl(:,:,:,:),
-     2     hesstargl(:,:,:,:)
-      double precision :: pt(3), gl(3), hl(6), vel(3), velgrad(3,3)
-      double precision :: press, pl, pv, dmu(3), dnu(3), sigma(3),pl4
-
-      integer ndl, ifchargel, ifdipolel, ifpghl, ifpghtargl
-      integer ndper
-
-      integer i, j, ii, ifppreg1, l, npt, ier,iper
+      double precision :: h, shift,eps, rscale,sc
 
 
-
-
-
-
-
-
-
-      double precision h, shift, rscale, lused,sc,npts
-      integer :: nc, ntm, ntot, lw, nlege, ns1, ilen
       double precision, allocatable :: centers(:,:)
-      double precision, allocatable :: wlege(:), rscales(:)
-      double complex, allocatable :: mpole1(:), mpole2(:)
-      double complex, allocatable :: mpole3(:), mpole4(:)
-      double complex, allocatable :: local1(:), local2(:)
-      double complex, allocatable :: local3(:), local4(:)
-      integer, allocatable :: nterms(:), impole(:)
-
-
-      double complex, allocatable :: local(:,:), mpole(:,:)
-
 
 
       double precision, allocatable :: charge1(:,:),charge2(:,:)
       double precision, allocatable :: charge3(:,:),charge4(:,:)
 
-
       double precision, allocatable :: potl1(:,:),potl2(:,:)
       double precision, allocatable :: potl3(:,:),potl4(:,:)
 
+      double precision, allocatable :: gradl1(:,:,:),gradl2(:,:,:)
+      double precision, allocatable :: gradl3(:,:,:),gradl4(:,:,:)
+
+      double precision, allocatable :: hessl1(:,:,:),hessl2(:,:,:)
+      double precision, allocatable :: hessl3(:,:,:),hessl4(:,:,:)
+
+
+      double complex, allocatable :: mpole1(:), mpole2(:)
+      double complex, allocatable :: mpole3(:), mpole4(:)
+      double complex, allocatable :: local1(:), local2(:)
+      double complex, allocatable :: local3(:), local4(:)
+
+
+
+
+      integer, allocatable :: nterms(:), impole(:)
+      double complex, allocatable :: scarray(:)
+
+      double precision, allocatable :: wlege(:), rscales(:)
+
+
+
+      double precision :: pt(3), gl(3), hl(6), vel(3), velgrad(3,3)
+      double precision :: press, pl, pv, dmu(3), dnu(3), sigma(3),pl4
+
+
+
+      double precision pot(3,nsource),pre(nsource)
+      double precision grad(3,3,nsource)
+      double precision pottarg(3,ntarg),pretarg(ntarg)
+      double precision gradtarg(3,3,ntarg)
+
+
+      double precision source(3,nsource), targ(3,ntarg)
+      
+
+      double precision stoklet(3,nsource)
+      double precision strslet(3,nsource)
+      double precision strsvec(3,nsource)
 
 
 
 
 
+c     allocate each ndl 
+
+      ns = nsource
+      nc = ns
 
 
-
-      nc = nsource
       allocate(centers(3,nc))
 
+      allocate(charge1(1,ns),charge2(1,ns),
+     1     charge3(1,ns),charge4(1,ns))
 
+      allocate(potl1(nd,ns))
+      allocate(potl2(nd,ns))
+      allocate(potl3(nd,ns))
+      allocate(potl4(nd,ns))
 
-      allocate(potl1(nd,nsource))
-      allocate(potl2(nd,nsource))
-      allocate(potl3(nd,nsource))
-      allocate(potl4(nd,nsource))
+      allocate(gradl1(nd,3,ns),gradl2(nd,3,ns))
+      allocate(gradl3(nd,3,ns),gradl4(nd,3,ns))
 
-
-
-      
-
-      ndper = 0
-      
-      if (ifstrslet .eq. 1 .or. ifstoklet .eq. 1) then
-         ndper = 4
-      endif
-
-      ifdipolel = 0
-      ifchargel = 0
-
-      if (ifstoklet .eq. 1) ifchargel = 1
-      if (ifstrslet .eq. 1) ifdipolel = 1
-      
-      ndper = 4
-      ndl = ndper*nd
-
-      ifpghl = 3
-      ifpghtargl = 3
-
-c     allocate necessary arrays
-      
-      allocate(charge(ndper,nd,nsource),dipvec(ndper,nd,3,nsource),
-     1     potl(ndper,nd,nsource),pottargl(ndper,nd,ntarg),
-     2     gradl(ndper,nd,3,nsource),gradtargl(ndper,nd,3,ntarg),
-     3     hessl(ndper,nd,6,nsource),hesstargl(ndper,nd,6,ntarg),
-     4     stat=ier)
-
-
-      allocate(charge1(nd,nsource),charge2(nd,nsource),
-     1     charge3(nd,nsource),charge4(nd,nsource))
+      allocate(hessl1(nd,6,ns),hessl2(nd,6,ns))
+      allocate(hessl3(nd,6,ns),hessl4(nd,6,ns))
 
 
 
 
-      if(ier .ne. 0) then
-         print *, "In stfmm3d: cannot allocate Laplace call storage"
-         print *, "ndper =",ndper
-         print *, "nd =",nd
-         print *, "nsource =",nsource
-         print *, "ntarg =",ntarg        
-         stop
-      endif
 
-      nc = nsource
 
 c     set-up appropriate vector charge and dipole arrays
 
-c$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(i,j,l,sigma,dmu,dnu)
-c$OMP$ PRIVATE(pl,pv,pl4)      
-      do i = 1,nsource
+      do i = 1,ns
+         charge1(1,i) = 0
+         charge2(1,i) = 0
+         charge3(1,i) = 0
+         charge4(1,i) = 0
 
-         do j = 1,nd
+         sigma(1) = stoklet(1,i)
+         sigma(2) = stoklet(2,i)
+         sigma(3) = stoklet(3,i)
 
-           charge1(j,i) = 0
-           charge2(j,i) = 0
-           charge3(j,i) = 0
-           charge4(j,i) = 0
-
-
-            do l = 1,ndper
-               charge(l,j,i) = 0
-            enddo
-         enddo
-
-         do j = 1,nd
-            if (ifstoklet .eq. 1) then
-               sigma(1) = stoklet(j,1,i)
-               sigma(2) = stoklet(j,2,i)
-               sigma(3) = stoklet(j,3,i)
-            endif
+         charge1(1,i) = charge1(1,i) + sigma(1)/2
+         charge2(1,i) = charge2(1,i) + sigma(2)/2
+         charge3(1,i) = charge3(1,i) + sigma(3)/2
 
 
-            if (ifstoklet .eq. 1) then
-                charge1(j,i) = charge1(j,i) + sigma(1)/2
-                charge2(j,i) = charge2(j,i) + sigma(2)/2
-                charge3(j,i) = charge3(j,i) + sigma(3)/2
-            endif
-
-            if (ifstoklet .eq. 1) then
                pl4 = sigma(1)*source(1,i) + sigma(2)*source(2,i) +
      1              sigma(3)*source(3,i)
-               charge4(j,i) = charge4(j,i) + pl4/2
-            endif
-
-
-
-            do l = 1,3
-               if (ifstoklet .eq. 1) then
-                  charge(l,j,i) = charge(l,j,i) + sigma(l)/2
-               endif
-            enddo
-            
-            l = 4
-            
-            if (ifstoklet .eq. 1) then
-               pl = sigma(1)*source(1,i) + sigma(2)*source(2,i) +
-     1              sigma(3)*source(3,i)
-               charge(l,j,i) = charge(l,j,i) + pl/2
-            endif
-         enddo
-         
+         charge4(1,i) = charge4(1,i) + pl4/2
       enddo
-c$OMP END PARALLEL DO      
 
 
 
 
 
-
-
-
-      h = 1.0d0/5
-      shift = 1.0d-6
+      h = 1.0d0/14
+      shift = h/10000
       call prin2('shift = *', shift, 1)
-
-      do i = 1,nsource
-         centers(1,i) = source(1,i) + shift
-         centers(2,i) = source(2,i)
-         centers(3,i) = source(3,i)
+      do i = 1,ns
+        centers(1,i) = source(1,i) + shift
+        centers(2,i) = source(2,i)
+        centers(3,i) = source(3,i)
       enddo
+
 
 
       allocate(nterms(nc), impole(nc))
 
-c      ntm = 10
       call l3dterms(eps, ntm)
-      call prinf('ntm = *', ntm, 1)
       ntot = 0
       do i = 1,nc
-         nterms(i) = ntm 
-         ntot = ntot + (nterms(i)+1)*(2*nterms(i)+1)
+        nterms(i) = ntm 
+        ntot = ntot + (nterms(i)+1)*(2*nterms(i)+1)
       enddo
-      call prinf('ntot = *', ntot, 1)
+
+
+      allocate(scarray(10*(ntm+2)**2))
+      call l3dtaevalhessdini(ntm,scarray)
 
 
 
-      allocate(mpole(ndper,nd*ntot))
       allocate(mpole1(nd*ntot))
       allocate(mpole2(nd*ntot))
       allocate(mpole3(nd*ntot))
       allocate(mpole4(nd*ntot))
 
+
+
+
+
+
+
       impole(1) = 1
       do i = 1,nc-1
-         ilen = (nterms(i)+1)*(2*nterms(i)+1)
-         impole(i+1) = impole(i) + nd*ilen
+      ilen = (nterms(i)+1)*(2*nterms(i)+1)
+      impole(i+1) = impole(i) + nd*ilen
       enddo
-      call prinf('ilen = *', ilen, 1)
-      call prin2('impole = *', impole, 10)
-  
-      nlege = 300
+
+
+      nlege = 400
       lw = 5*(nlege+1)**2
       allocate( wlege(lw) )
 
@@ -369,164 +182,156 @@ c      ntm = 10
       call prinf('after ylgndrfwini, lused = *', lused, 1)
 
 
-      call zinitialize(ndper*nd*ntot*2, mpole)
+
       call zinitialize(nd*ntot*2, mpole1)
       call zinitialize(nd*ntot*2, mpole2)
       call zinitialize(nd*ntot*2, mpole3)
       call zinitialize(nd*ntot*2, mpole4)
-      
+
+
+
       ns1 = 1
       rscale = 1
       sc = shift
       if (sc .lt. 1) rscale = sc
       call prin2('rscale = *', rscale, 1)
-      
-      allocate(rscales(nc))
 
 
-
-      allocate(local(ndper,nd*ntot))
       allocate(local1(nd*ntot))
       allocate(local2(nd*ntot))
       allocate(local3(nd*ntot))
       allocate(local4(nd*ntot))
-      local1 = 0
+
 
       npts = 1
-      iper = 0
-      ier = 0
 
-
-
-
-
-
-
-c   First ndl
-      do i = 1,nc
-         rscales(i) = rscale
-      call l3dformmpc(nd,rscale, source(1,i), charge1(1,i),
-     1     ns1, centers(1,i), nterms(i), mpole1(impole(i)),
-     2     wlege, nlege)
-      enddo
-
-
-      call lfmm3d_mps(nd, eps, nc, centers, rscales, nterms,
-     1     mpole1, impole, local1, ier)
-
-
-
-
-      call zinitialize(nd*nc*ndper, potl)
-      call zinitialize(nd*nc*ndper*3, gradl)
 
 
       call zinitialize(nd*nc, potl1)
       call zinitialize(nd*nc, potl2)
       call zinitialize(nd*nc, potl3)
       call zinitialize(nd*nc, potl4)
-      npts = 1
 
 
-c      do i = 1,nc
-c      call l3dtaevalg(nd, rscales(i),
-c     1     centers(1,i), local1(impole(i)), 
-c     2     nterms(i), source(1,i), npts, potl1(1,i),gradl(1,1,1,i), 
-c     3     wlege, nlege)
-c      enddo
+
+c   First ndl
+      allocate(rscales(nc))
+      do i = 1,nc
+        rscales(i) = rscale
+      call l3dformmpc(nd,rscale, source(1,i), charge1(1,i),
+     1   ns1, centers(1,i), nterms(i), mpole1(impole(i)),
+     2   wlege, nlege)
+      enddo
+
+  
+      call lfmm3d_mps(nd, eps,
+     1   nc, centers, rscales, nterms, mpole1, impole, local1,ier)
+
 
 
       do i = 1,nc
-      call l3dtaevalp(nd, rscales(i),
-     1     centers(1,i), local1(impole(i)),
-     2     nterms(i), source(1,i), npts, potl1(1,i),
-     3     wlege, nlege)
+      call l3dtaevalh(nd, rscales(i),
+     1   centers(1,i), local1(impole(i)),
+     2   nterms(i), source(1,i), npts, potl1(1,i),gradl1(1,1,i),
+     3   hessl1(1,1,i),scarray)
       enddo
 
 
-      call prin2('via mps, potl1 = *', potl1, 10)
-      call prin2('via mps, gradl = *', gradl, 10)
+
+      call prin2('from lfmm3d_mps, potential = *', potl1, 10)
+      call prin2('from lfmm3d_mps, grad = *', gradl1, 10)
+      call prin2('from lfmm3d_mps, hess = *', hessl1, 10)
 
 
 
 
+      
 
 c   Second ndl
       do i = 1,nc
-         rscales(i) = rscale
+        rscales(i) = rscale
       call l3dformmpc(nd,rscale, source(1,i), charge2(1,i),
-     1     ns1, centers(1,i), nterms(i), mpole2(impole(i)),
-     2     wlege, nlege)
+     1   ns1, centers(1,i), nterms(i), mpole2(impole(i)),
+     2   wlege, nlege)
       enddo
 
-      call lfmm3d_mps(nd, eps, nc, centers, rscales, nterms,
-     1     mpole2, impole, local2, ier)
-
-
-      call prin2('local2 = *', local2, 10)
+  
+      call lfmm3d_mps(nd, eps,
+     1   nc, centers, rscales, nterms, mpole2, impole, local2,ier)
 
 
       do i = 1,nc
-      call l3dtaevalg(nd, rscales(i),
-     1     centers(1,i), local2(impole(i)), 
-     2     nterms(i), source(1,i), npts, potl2(1,i),gradl(2,1,1,i), 
-     3     wlege, nlege)
+      call l3dtaevalh(nd, rscales(i),
+     1   centers(1,i), local2(impole(i)),
+     2   nterms(i), source(1,i), npts, potl2(1,i),gradl2(1,1,i),
+     3   hessl2(1,1,i),scarray)
       enddo
-      call prin2('via mps, potl = *', potl2, 10)
-      call prin2('via mps, gradl = *', gradl, 10)
+
+      call prin2('from lfmm3d_mps, potential = *', potl2, 10)
+      call prin2('from lfmm3d_mps, grad = *', gradl2, 10)
 
 
 
 
 
-c   third ndl
+
+
+c   Third ndl
       do i = 1,nc
-         rscales(i) = rscale
+        rscales(i) = rscale
       call l3dformmpc(nd,rscale, source(1,i), charge3(1,i),
-     1     ns1, centers(1,i), nterms(i), mpole3(impole(i)),
-     2     wlege, nlege)
+     1   ns1, centers(1,i), nterms(i), mpole3(impole(i)),
+     2   wlege, nlege)
       enddo
 
-      call lfmm3d_mps(nd, eps, nc, centers, rscales, nterms,
-     1     mpole3, impole, local3, ier)
+  
+      call lfmm3d_mps(nd, eps,
+     1   nc, centers, rscales, nterms, mpole3, impole, local3,ier)
 
-
-      call prin2('local3 = *', local3, 10)
 
       do i = 1,nc
-      call l3dtaevalg(nd, rscales(i),
-     1     centers(1,i), local3(impole(i)), 
-     2     nterms(i), source(1,i), npts, potl3(1,i),gradl(3,1,1,i), 
-     3     wlege, nlege)
+      call l3dtaevalh(nd, rscales(i),
+     1   centers(1,i), local3(impole(i)),
+     2   nterms(i), source(1,i), npts, potl3(1,i),gradl3(1,1,i),
+     3   hessl3(1,1,i),scarray)
       enddo
-      call prin2('via mps, potl = *', potl3, 10)
-      call prin2('via mps, gradl = *', gradl, 10)
+
+
+
+
+      call prin2('from lfmm3d_mps, potential = *', potl3, 10)
+      call prin2('from lfmm3d_mps, grad = *', gradl3, 10)
 
 
 
 
 
-c   fourth ndl
+
+
+c   Fourth ndl
       do i = 1,nc
-         rscales(i) = rscale
+        rscales(i) = rscale
       call l3dformmpc(nd,rscale, source(1,i), charge4(1,i),
-     1     ns1, centers(1,i), nterms(i), mpole4(impole(i)),
-     2     wlege, nlege)
+     1   ns1, centers(1,i), nterms(i), mpole4(impole(i)),
+     2   wlege, nlege)
       enddo
 
-      call lfmm3d_mps(nd, eps, nc, centers, rscales, nterms,
-     1     mpole4, impole, local4, ier)
+  
+      call lfmm3d_mps(nd, eps,
+     1   nc, centers, rscales, nterms, mpole4, impole, local4,ier)
 
-      call prin2('local4 = *', local4, 10)
 
       do i = 1,nc
-      call l3dtaevalg(ndl, rscales(i),
-     1     centers(1,i), local4(impole(i)), 
-     2     nterms(i), source(1,i), npts, potl4(1,i),gradl(4,1,1,i), 
-     3     wlege, nlege)
+      call l3dtaevalh(nd, rscales(i),
+     1   centers(1,i), local4(impole(i)),
+     2   nterms(i), source(1,i), npts, potl4(1,i),gradl4(1,1,i),
+     3   hessl4(1,1,i),scarray)
       enddo
-      call prin2('via mps, potl = *', potl4, 10)
-      call prin2('via mps, gradl = *', gradl, 10)
+
+
+
+      call prin2('from lfmm3d_mps, potential = *', potl4, 10)
+      call prin2('from lfmm3d_mps, grad = *', gradl4, 10)
 
 
 
@@ -534,35 +339,9 @@ c   fourth ndl
 
 
 
+c     we only consider no targ condition now
 
-
-
-
-
-
-
-
-
-
-      call lfmm3d(ndl,eps,nsource,source,ifchargel,charge,
-     1     ifdipolel,dipvec,iper,ifpghl,potl,gradl,hessl,ntarg,
-     2     targ,ifpghtargl,pottargl,gradtargl,hesstargl,ier)
-
-
-      call prin2('via fmm, potl = *', potl, 10)
-      call prin2('via fmm, gradl = *', gradl, 10)
-
-
-
-
-
-
-
-
-
-
-
-      npt = ntarg + nsource
+      npt = ntarg + ns
 
 c     unpack stacked Laplace FMM calls
 
@@ -585,141 +364,225 @@ c$OMP$ PRIVATE(pt,pl,gl,hl,vel,velgrad,press)
             velgrad(2,3) = 0
             velgrad(3,3) = 0
             press = 0
-            
-            do l = 1,ndper
-               
-               if (i .gt. ntarg) then
-                  ifppreg1 = ifppreg
-                  ii = i-ntarg
-                  pt(1) = source(1,ii)
-                  pt(2) = source(2,ii)
-                  pt(3) = source(3,ii)
-                  pl = potl(l,j,ii)
-                  gl(1) = gradl(l,j,1,ii)
-                  gl(2) = gradl(l,j,2,ii)
-                  gl(3) = gradl(l,j,3,ii)
-                  hl(1) = hessl(l,j,1,ii)
-                  hl(2) = hessl(l,j,2,ii)
-                  hl(3) = hessl(l,j,3,ii)
-                  hl(4) = hessl(l,j,4,ii)
-                  hl(5) = hessl(l,j,5,ii)
-                  hl(6) = hessl(l,j,6,ii)            
-               else
-                  ifppreg1 = ifppregtarg                  
-                  ii = i
-                  pt(1) = targ(1,ii)
-                  pt(2) = targ(2,ii)
-                  pt(3) = targ(3,ii)
-                  pl = pottargl(l,j,ii)
-                  gl(1) = gradtargl(l,j,1,ii)
-                  gl(2) = gradtargl(l,j,2,ii)
-                  gl(3) = gradtargl(l,j,3,ii)
-                  hl(1) = hesstargl(l,j,1,ii)
-                  hl(2) = hesstargl(l,j,2,ii)
-                  hl(3) = hesstargl(l,j,3,ii)
-                  hl(4) = hesstargl(l,j,4,ii)
-                  hl(5) = hesstargl(l,j,5,ii)
-                  hl(6) = hesstargl(l,j,6,ii)            
-               endif
 
-               
-               if (l .ge. 1 .and. l .le. 3) then
-                  
-                  vel(l) = vel(l) + pl
-                  vel(1) = vel(1) - pt(l)*gl(1)
-                  vel(2) = vel(2) - pt(l)*gl(2)
-                  vel(3) = vel(3) - pt(l)*gl(3)
-                  press = press - gl(l)*2
-                  if (ifppreg1 .eq. 3) then
-                     velgrad(1,l) =  velgrad(1,l) + gl(1)
-                     velgrad(2,l) =  velgrad(2,l) + gl(2)
-                     velgrad(3,l) =  velgrad(3,l) + gl(3)
+c process l = 1
+            if (i .gt. ntarg) then
+               ifppreg1 = ifppreg
+               ii = i-ntarg
+               pt(1) = source(1,ii)
+               pt(2) = source(2,ii)
+               pt(3) = source(3,ii)
+               pl = potl1(j,ii)
+               gl(1) = gradl1(j,1,ii)
+               gl(2) = gradl1(j,2,ii)
+               gl(3) = gradl1(j,3,ii)
+               hl(1) = hessl1(j,1,ii)
+               hl(2) = hessl1(j,2,ii)
+               hl(3) = hessl1(j,3,ii)
+               hl(4) = hessl1(j,4,ii)
+               hl(5) = hessl1(j,5,ii)
+               hl(6) = hessl1(j,6,ii)                       
+            endif
 
-                     velgrad(l,1) = velgrad(l,1) - gl(1)
-                     velgrad(l,2) = velgrad(l,2) - gl(2)
-                     velgrad(l,3) = velgrad(l,3) - gl(3)                     
+
+            vel(1) = vel(1) + pl
+            vel(1) = vel(1) - pt(1)*gl(1)
+            vel(2) = vel(2) - pt(1)*gl(2)
+            vel(3) = vel(3) - pt(1)*gl(3)
+            press = press - gl(1)*2
+            if (ifppreg1 .eq. 3) then
+               velgrad(1,1) =  velgrad(1,1) + gl(1)
+               velgrad(2,1) =  velgrad(2,1) + gl(2)
+               velgrad(3,1) =  velgrad(3,1) + gl(3)
+
+               velgrad(1,1) = velgrad(1,1) - gl(1)
+               velgrad(1,2) = velgrad(1,2) - gl(2)
+               velgrad(1,3) = velgrad(1,3) - gl(3)                     
 
 c     confirm hessian ordering convention...
-                     velgrad(1,1) = velgrad(1,1) - pt(l)*hl(1)
-                     velgrad(2,1) = velgrad(2,1) - pt(l)*hl(4)
-                     velgrad(3,1) = velgrad(3,1) - pt(l)*hl(5)
-                     velgrad(1,2) = velgrad(1,2) - pt(l)*hl(4)
-                     velgrad(2,2) = velgrad(2,2) - pt(l)*hl(2)
-                     velgrad(3,2) = velgrad(3,2) - pt(l)*hl(6)
-                     velgrad(1,3) = velgrad(1,3) - pt(l)*hl(5)
-                     velgrad(2,3) = velgrad(2,3) - pt(l)*hl(6)
-                     velgrad(3,3) = velgrad(3,3) - pt(l)*hl(3)
-                  endif
+               velgrad(1,1) = velgrad(1,1) - pt(1)*hl(1)
+               velgrad(2,1) = velgrad(2,1) - pt(1)*hl(4)
+               velgrad(3,1) = velgrad(3,1) - pt(1)*hl(5)
+               velgrad(1,2) = velgrad(1,2) - pt(1)*hl(4)
+               velgrad(2,2) = velgrad(2,2) - pt(1)*hl(2)
+               velgrad(3,2) = velgrad(3,2) - pt(1)*hl(6)
+               velgrad(1,3) = velgrad(1,3) - pt(1)*hl(5)
+               velgrad(2,3) = velgrad(2,3) - pt(1)*hl(6)
+               velgrad(3,3) = velgrad(3,3) - pt(1)*hl(3)
+            endif
 
-               else if (l .eq. 4) then
 
-                  vel(1) = vel(1) + gl(1)
-                  vel(2) = vel(2) + gl(2)
-                  vel(3) = vel(3) + gl(3)                  
-                  if (ifppreg1 .eq. 3) then
+
+c  when l = 2
+            if (i .gt. ntarg) then
+               ifppreg1 = ifppreg
+               ii = i-ntarg
+               pt(1) = source(1,ii)
+               pt(2) = source(2,ii)
+               pt(3) = source(3,ii)
+               pl = potl2(j,ii)
+               gl(1) = gradl2(j,1,ii)
+               gl(2) = gradl2(j,2,ii)
+               gl(3) = gradl2(j,3,ii)
+               hl(1) = hessl2(j,1,ii)
+               hl(2) = hessl2(j,2,ii)
+               hl(3) = hessl2(j,3,ii)
+               hl(4) = hessl2(j,4,ii)
+               hl(5) = hessl2(j,5,ii)
+               hl(6) = hessl2(j,6,ii)                       
+            endif
+
+
+            vel(2) = vel(2) + pl
+            vel(1) = vel(1) - pt(2)*gl(1)
+            vel(2) = vel(2) - pt(2)*gl(2)
+            vel(3) = vel(3) - pt(2)*gl(3)
+            press = press - gl(2)*2
+            if (ifppreg1 .eq. 3) then
+               velgrad(1,2) =  velgrad(1,2) + gl(1)
+               velgrad(2,2) =  velgrad(2,2) + gl(2)
+               velgrad(3,2) =  velgrad(3,2) + gl(3)
+
+               velgrad(2,1) = velgrad(2,1) - gl(1)
+               velgrad(2,2) = velgrad(2,2) - gl(2)
+               velgrad(2,3) = velgrad(2,3) - gl(3)                     
+
 c     confirm hessian ordering convention...
-                     velgrad(1,1) = velgrad(1,1) + hl(1)
-                     velgrad(2,1) = velgrad(2,1) + hl(4)
-                     velgrad(3,1) = velgrad(3,1) + hl(5)
-                     velgrad(1,2) = velgrad(1,2) + hl(4)
-                     velgrad(2,2) = velgrad(2,2) + hl(2)
-                     velgrad(3,2) = velgrad(3,2) + hl(6)
-                     velgrad(1,3) = velgrad(1,3) + hl(5)
-                     velgrad(2,3) = velgrad(2,3) + hl(6)
-                     velgrad(3,3) = velgrad(3,3) + hl(3)
-                  endif
-                  
+               velgrad(1,1) = velgrad(1,1) - pt(2)*hl(1)
+               velgrad(2,1) = velgrad(2,1) - pt(2)*hl(4)
+               velgrad(3,1) = velgrad(3,1) - pt(2)*hl(5)
+               velgrad(1,2) = velgrad(1,2) - pt(2)*hl(4)
+               velgrad(2,2) = velgrad(2,2) - pt(2)*hl(2)
+               velgrad(3,2) = velgrad(3,2) - pt(2)*hl(6)
+               velgrad(1,3) = velgrad(1,3) - pt(2)*hl(5)
+               velgrad(2,3) = velgrad(2,3) - pt(2)*hl(6)
+               velgrad(3,3) = velgrad(3,3) - pt(2)*hl(3)
+            endif
+
+
+
+c l = 3
+
+            if (i .gt. ntarg) then
+               ifppreg1 = ifppreg
+               ii = i-ntarg
+               pt(1) = source(1,ii)
+               pt(2) = source(2,ii)
+               pt(3) = source(3,ii)
+               pl = potl3(j,ii)
+               gl(1) = gradl3(j,1,ii)
+               gl(2) = gradl3(j,2,ii)
+               gl(3) = gradl3(j,3,ii)
+               hl(1) = hessl3(j,1,ii)
+               hl(2) = hessl3(j,2,ii)
+               hl(3) = hessl3(j,3,ii)
+               hl(4) = hessl3(j,4,ii)
+               hl(5) = hessl3(j,5,ii)
+               hl(6) = hessl3(j,6,ii)                       
+            endif
+
+
+            vel(3) = vel(3) + pl
+            vel(1) = vel(1) - pt(3)*gl(1)
+            vel(2) = vel(2) - pt(3)*gl(2)
+            vel(3) = vel(3) - pt(3)*gl(3)
+            press = press - gl(3)*2
+            if (ifppreg1 .eq. 3) then
+               velgrad(1,3) =  velgrad(1,3) + gl(1)
+               velgrad(2,3) =  velgrad(2,3) + gl(2)
+               velgrad(3,3) =  velgrad(3,3) + gl(3)
+
+               velgrad(3,1) = velgrad(3,1) - gl(1)
+               velgrad(3,2) = velgrad(3,2) - gl(2)
+               velgrad(3,3) = velgrad(3,3) - gl(3)                     
+
+c     confirm hessian ordering convention...
+               velgrad(1,1) = velgrad(1,1) - pt(3)*hl(1)
+               velgrad(2,1) = velgrad(2,1) - pt(3)*hl(4)
+               velgrad(3,1) = velgrad(3,1) - pt(3)*hl(5)
+               velgrad(1,2) = velgrad(1,2) - pt(3)*hl(4)
+               velgrad(2,2) = velgrad(2,2) - pt(3)*hl(2)
+               velgrad(3,2) = velgrad(3,2) - pt(3)*hl(6)
+               velgrad(1,3) = velgrad(1,3) - pt(3)*hl(5)
+               velgrad(2,3) = velgrad(2,3) - pt(3)*hl(6)
+               velgrad(3,3) = velgrad(3,3) - pt(3)*hl(3)
+            endif
+
+
+
+
+c     l = 4
+
+            if (i .gt. ntarg) then
+               ifppreg1 = ifppreg
+               ii = i-ntarg
+               pt(1) = source(1,ii)
+               pt(2) = source(2,ii)
+               pt(3) = source(3,ii)
+               pl = potl4(j,ii)
+               gl(1) = gradl4(j,1,ii)
+               gl(2) = gradl4(j,2,ii)
+               gl(3) = gradl4(j,3,ii)
+               hl(1) = hessl4(j,1,ii)
+               hl(2) = hessl4(j,2,ii)
+               hl(3) = hessl4(j,3,ii)
+               hl(4) = hessl4(j,4,ii)
+               hl(5) = hessl4(j,5,ii)
+               hl(6) = hessl4(j,6,ii)                       
+            endif
+
+
+
+               vel(1) = vel(1) + gl(1)
+               vel(2) = vel(2) + gl(2)
+               vel(3) = vel(3) + gl(3)                  
+               if (ifppreg1 .eq. 3) then
+c     confirm hessian ordering convention...
+                  velgrad(1,1) = velgrad(1,1) + hl(1)
+                  velgrad(2,1) = velgrad(2,1) + hl(4)
+                  velgrad(3,1) = velgrad(3,1) + hl(5)
+                  velgrad(1,2) = velgrad(1,2) + hl(4)
+                  velgrad(2,2) = velgrad(2,2) + hl(2)
+                  velgrad(3,2) = velgrad(3,2) + hl(6)
+                  velgrad(1,3) = velgrad(1,3) + hl(5)
+                  velgrad(2,3) = velgrad(2,3) + hl(6)
+                  velgrad(3,3) = velgrad(3,3) + hl(3)
                endif
-            enddo
+
+
+
+c    end part
 
             if (i .gt. ntarg) then
                if (ifppreg1 .ge. 1) then
-                  pot(j,1,ii) = vel(1)
-                  pot(j,2,ii) = vel(2)
-                  pot(j,3,ii) = vel(3)
+                  pot(1,ii) = vel(1)
+                  pot(2,ii) = vel(2)
+                  pot(3,ii) = vel(3)
                endif
                if (ifppreg1 .ge. 2) then
-                  pre(j,ii) = press
+                  pre(ii) = press
                endif
                if (ifppreg1 .ge. 3) then
-                  grad(j,1,1,ii) = velgrad(1,1)
-                  grad(j,2,1,ii) = velgrad(2,1)
-                  grad(j,3,1,ii) = velgrad(3,1)
-                  grad(j,1,2,ii) = velgrad(1,2)
-                  grad(j,2,2,ii) = velgrad(2,2)
-                  grad(j,3,2,ii) = velgrad(3,2)
-                  grad(j,1,3,ii) = velgrad(1,3)
-                  grad(j,2,3,ii) = velgrad(2,3)
-                  grad(j,3,3,ii) = velgrad(3,3)
-               endif
-            else
-               if (ifppreg1 .ge. 1) then
-                  pottarg(j,1,ii) = vel(1)
-                  pottarg(j,2,ii) = vel(2)
-                  pottarg(j,3,ii) = vel(3)
-               endif
-               if (ifppreg1 .ge. 2) then
-                  pretarg(j,ii) = press
-               endif
-               if (ifppreg1 .ge. 3) then
-                  gradtarg(j,1,1,ii) = velgrad(1,1)
-                  gradtarg(j,2,1,ii) = velgrad(2,1)
-                  gradtarg(j,3,1,ii) = velgrad(3,1)
-                  gradtarg(j,1,2,ii) = velgrad(1,2)
-                  gradtarg(j,2,2,ii) = velgrad(2,2)
-                  gradtarg(j,3,2,ii) = velgrad(3,2)
-                  gradtarg(j,1,3,ii) = velgrad(1,3)
-                  gradtarg(j,2,3,ii) = velgrad(2,3)
-                  gradtarg(j,3,3,ii) = velgrad(3,3)
+                  grad(1,1,ii) = velgrad(1,1)
+                  grad(2,1,ii) = velgrad(2,1)
+                  grad(3,1,ii) = velgrad(3,1)
+                  grad(1,2,ii) = velgrad(1,2)
+                  grad(2,2,ii) = velgrad(2,2)
+                  grad(3,2,ii) = velgrad(3,2)
+                  grad(1,3,ii) = velgrad(1,3)
+                  grad(2,3,ii) = velgrad(2,3)
+                  grad(3,3,ii) = velgrad(3,3)
                endif
             endif               
          enddo
       enddo
 c$OMP END PARALLEL DO
-      
+
+
+
+
       return
       end
-
 
 
 
@@ -733,4 +596,26 @@ c$OMP END PARALLEL DO
       end do
       return
       end subroutine zinitialize
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
